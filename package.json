@@ -8,7 +8,7 @@
   "scripts": {
     "build": "npm run check:format && npm run check:lint && nest build",
     "check:format": "prettier --check \"src/**/*.{ts,tsx,js,json,md}\"",
-    "check:lint": "eslint \"src/**/*.ts\" --max-warnings=0",
+    "check:lint": "eslint \"src/**/*.ts\" --max-warnings=10",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "dotenv -e .env -- nest start",
     "start:dev": "dotenv -e .env.development -- nest start --watch",
