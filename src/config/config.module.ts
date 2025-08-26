@@ -43,6 +43,22 @@ import { databaseConfig } from './database/database.config';
           .truthy('true', '1')
           .falsy('false', '0')
           .default(true),
+
+        // Cloudinary
+        CLOUDINARY_CLOUD_NAME: Joi.string().required(),
+        CLOUDINARY_API_KEY: Joi.string().required(),
+        CLOUDINARY_API_SECRET: Joi.string().required(),
+        CLOUDINARY_SECURE: Joi.boolean()
+          .truthy('true', '1', 'yes', 'on')
+          .falsy('false', '0', 'no', 'off')
+          .default(true),
+        CLOUDINARY_API_BASE_URL: Joi.string().uri().optional(),
+        CLOUDINARY_RETRY_ATTEMPTS: Joi.number().integer().min(0).default(2),
+        CLOUDINARY_RETRY_DELAY_MS: Joi.number().integer().min(0).default(500),
+        CLOUDINARY_FAIL_FAST: Joi.boolean()
+          .truthy('true', '1', 'yes', 'on')
+          .falsy('false', '0', 'no', 'off')
+          .default(true),
       }),
     }),
   ],
