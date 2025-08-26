@@ -1,0 +1,48 @@
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /app/logs/*.log
+    json.keys_under_root: true
+    json.add_error_key: true
+    json.message_key: message
+
+  - type: container
+    enabled: true
+    paths:
+      - '/var/lib/docker/containers/*/*.log'
+
+processors:
+  - add_docker_metadata:
+      host: 'unix:///var/run/docker.sock'
+
+  - add_cloud_metadata: ~
+
+  - drop_fields:
+      fields: ['agent', 'ecs', 'log', 'input', 'host']
+
+output.elasticsearch:
+  hosts: ['elasticsearch:9200']
+  indices:
+    - index: 'filebeat-cv-scanner-%{+yyyy.MM.dd}'
+      when.contains:
+        container.labels.com_docker_compose_service: 'app'
+    - index: 'filebeat-postgres-%{+yyyy.MM.dd}'
+      when.contains:
+        container.labels.com_docker_compose_service: 'postgres'
+
+setup.kibana:
+  host: 'kibana:5601'
+
+setup.dashboards.enabled: true
+setup.template.enabled: true
+
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat
+  keepfiles: 7
+  permissions: 0644
+
+queue.spool: ~
