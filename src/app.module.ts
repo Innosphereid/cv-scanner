@@ -5,9 +5,16 @@ import { HealthModule } from './health.module';
 import { LoggerModule } from './utils/logger.module';
 import { AppConfigModule } from './config/config.module';
 import { DatabaseModule } from './config/database/database.module';
+import { SentryModule } from '@sentry/nestjs/setup';
 
 @Module({
-  imports: [LoggerModule, AppConfigModule, DatabaseModule, HealthModule],
+  imports: [
+    SentryModule.forRoot(),
+    LoggerModule,
+    AppConfigModule,
+    DatabaseModule,
+    HealthModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

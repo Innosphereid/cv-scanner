@@ -158,3 +158,6 @@ public
 # Temporary folders
 tmp/
 temp/
+
+# Sentry Config File
+.sentryclirc
