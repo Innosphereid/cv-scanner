@@ -39,6 +39,7 @@
     "@nestjs/typeorm": "^11.0.0",
     "@sentry/cli": "^2.52.0",
     "@sentry/nestjs": "^10.6.0",
+    "@sentry/profiling-node": "^10.6.0",
     "cloudinary": "^2.7.0",
     "joi": "^18.0.1",
     "pg": "^8.16.3",

@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { RequestContextInterceptor } from './utils/responses/request-context.interceptor';
-import '../instrument';
+import './instrument';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);

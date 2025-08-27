@@ -36,14 +36,6 @@ export class AppController {
     return this.appService.getDebug();
   }
 
-  @Get('debug-sentry')
-  getSentryError() {
-    this.logger.warn(
-      'Sentry debug endpoint accessed - this will throw an error for Sentry testing',
-    );
-    throw new Error('My first Sentry error!');
-  }
-
   @Get('metadata')
   getMetadata(): any {
     const metadata = {
