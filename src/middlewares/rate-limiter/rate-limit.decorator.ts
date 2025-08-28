@@ -1,4 +1,5 @@
 import { SetMetadata } from '@nestjs/common';
+import { RateLimitResult } from './rate-limiter.service';
 
 export const RATE_LIMIT_KEY = 'rate_limit';
 
@@ -7,6 +8,13 @@ export interface RateLimitMetadata {
   customTtl?: number;
   customLimit?: number;
   description?: string;
+}
+
+/**
+ * Extended rate limit result that includes type information
+ */
+export interface ExtendedRateLimitResult extends RateLimitResult {
+  type: string;
 }
 
 /**

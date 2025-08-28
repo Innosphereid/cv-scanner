@@ -5,22 +5,22 @@ import {
   CallHandler,
   HttpException,
   HttpStatus,
-  Logger,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { Request, Response } from 'express';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
-import { RateLimiterService, RateLimitResult } from './rate-limiter.service';
-import { RATE_LIMIT_KEY, RateLimitMetadata } from './rate-limit.decorator';
-
-interface ExtendedRateLimitResult extends RateLimitResult {
-  type: string;
-}
+import { Request, Response } from 'express';
+import { RateLimiterService } from './rate-limiter.service';
+import { Logger } from '../../utils/logger';
+import {
+  RATE_LIMIT_KEY,
+  RateLimitMetadata,
+  ExtendedRateLimitResult,
+} from './rate-limit.decorator';
 
 @Injectable()
 export class RateLimitInterceptor implements NestInterceptor {
-  private readonly logger = new Logger(RateLimitInterceptor.name);
+  private readonly logger = new Logger();
 
   constructor(
     private readonly rateLimiterService: RateLimiterService,
@@ -46,112 +46,219 @@ export class RateLimitInterceptor implements NestInterceptor {
     }
 
     try {
-      // Get client IP address
-      const clientIp = this.getClientIp(request);
-
-      // Check rate limit
-      const rateLimitResult = await this.rateLimiterService.checkRateLimit({
-        type: rateLimitMetadata.type,
-        identifier: clientIp,
-        customTtl: rateLimitMetadata.customTtl,
-        customLimit: rateLimitMetadata.customLimit,
-      });
-
-      // Create extended result with type information
-      const extendedResult: ExtendedRateLimitResult = {
-        ...rateLimitResult,
-        type: rateLimitMetadata.type,
-      };
-
-      // If rate limit exceeded, return error
-      if (!extendedResult.isAllowed) {
-        // Set rate limit headers
-        this.setRateLimitHeaders(response, extendedResult);
-
-        // Log the violation
-        this.logger.warn(
-          `Rate limit exceeded for ${clientIp} on ${request.method} ${request.url}`,
-          {
-            ip: clientIp,
-            method: request.method,
-            url: request.url,
-            type: extendedResult.type,
-            currentCount: extendedResult.currentCount,
-            limit: extendedResult.limit,
-            remainingTime: extendedResult.remainingTime,
-          },
-        );
-
-        // Throw HTTP 429 error
-        throw new HttpException(
-          {
-            statusCode: HttpStatus.TOO_MANY_REQUESTS,
-            message: this.getRateLimitErrorMessage(extendedResult),
-            error: 'Too Many Requests',
-            timestamp: new Date().toISOString(),
-            path: request.url,
-            method: request.method,
-            rateLimitInfo: {
-              type: extendedResult.type,
-              currentCount: extendedResult.currentCount,
-              limit: extendedResult.limit,
-              remainingTime: extendedResult.remainingTime,
-              resetTime: extendedResult.resetTime,
-            },
-          },
-          HttpStatus.TOO_MANY_REQUESTS,
-        );
-      }
-
-      // Set rate limit headers for successful requests
-      this.setRateLimitHeaders(response, extendedResult);
-
-      // Proceed with the request
-      return next.handle().pipe(
-        catchError((error: unknown) => {
-          // Log any errors that occur during request processing
-          if (error instanceof HttpException) {
-            this.logger.error(`Request processing error for ${clientIp}`, {
-              ip: clientIp,
-              method: request.method,
-              url: request.url,
-              error: error.message,
-              statusCode: error.getStatus(),
-            });
-          }
-          return throwError(() => error);
-        }),
+      return await this.processRateLimitedRequest(
+        request,
+        response,
+        rateLimitMetadata,
+        next,
       );
     } catch (error) {
-      // Handle any errors that occur during rate limiting
-      this.logger.error(
-        `Rate limiting error for ${request.ip || 'unknown IP'}`,
-        {
-          ip: request.ip,
-          method: request.method,
-          url: request.url,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        },
-      );
+      return this.handleRateLimitError(error, request);
+    }
+  }
 
-      // If it's already an HTTP exception, re-throw it
-      if (error instanceof HttpException) {
-        throw error;
-      }
+  /**
+   * Process request with rate limiting
+   */
+  private async processRateLimitedRequest(
+    request: Request,
+    response: Response,
+    rateLimitMetadata: RateLimitMetadata,
+    next: CallHandler,
+  ): Promise<Observable<any>> {
+    const clientIp = this.getClientIp(request);
 
-      // For other errors, return a generic rate limiting error
-      throw new HttpException(
-        {
-          statusCode: HttpStatus.TOO_MANY_REQUESTS,
-          message: 'Rate limiting service temporarily unavailable',
-          error: 'Too Many Requests',
-          timestamp: new Date().toISOString(),
-          path: request.url,
-          method: request.method,
-        },
-        HttpStatus.TOO_MANY_REQUESTS,
+    // Check rate limit
+    const rateLimitResult = await this.rateLimiterService.checkRateLimit({
+      type: rateLimitMetadata.type,
+      identifier: clientIp,
+      customTtl: rateLimitMetadata.customTtl,
+      customLimit: rateLimitMetadata.customLimit,
+    });
+
+    // Create extended result with type information
+    const extendedResult: ExtendedRateLimitResult = {
+      ...rateLimitResult,
+      type: rateLimitMetadata.type,
+    };
+
+    // Handle rate limit exceeded
+    if (!extendedResult.isAllowed) {
+      return this.handleRateLimitExceeded(
+        request,
+        response,
+        extendedResult,
+        clientIp,
       );
     }
+
+    // Set rate limit headers for successful requests
+    this.setRateLimitHeaders(response, extendedResult);
+
+    // Proceed with the request
+    return this.handleSuccessfulRequest(next, request, clientIp);
+  }
+
+  /**
+   * Handle rate limit exceeded scenario
+   */
+  private handleRateLimitExceeded(
+    request: Request,
+    response: Response,
+    extendedResult: ExtendedRateLimitResult,
+    clientIp: string,
+  ): Observable<never> {
+    // Set rate limit headers
+    this.setRateLimitHeaders(response, extendedResult);
+
+    // Log the violation
+    this.logRateLimitViolation(request, extendedResult, clientIp);
+
+    // Throw HTTP 429 error
+    throw new HttpException(
+      this.createRateLimitErrorResponse(request, extendedResult),
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
+  }
+
+  /**
+   * Handle successful request processing
+   */
+  private handleSuccessfulRequest(
+    next: CallHandler,
+    request: Request,
+    clientIp: string,
+  ): Observable<any> {
+    return next.handle().pipe(
+      catchError((error: unknown) => {
+        this.logRequestProcessingError(error, request, clientIp);
+        return throwError(() => error);
+      }),
+    );
+  }
+
+  /**
+   * Handle rate limiting errors
+   */
+  private handleRateLimitError(
+    error: unknown,
+    request: Request,
+  ): Observable<never> {
+    // Handle any errors that occur during rate limiting
+    this.logRateLimitError(error, request);
+
+    // If it's already an HTTP exception, re-throw it
+    if (error instanceof HttpException) {
+      throw error;
+    }
+
+    // For other errors, return a generic rate limiting error
+    throw new HttpException(
+      this.createGenericRateLimitErrorResponse(request),
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
+  }
+
+  /**
+   * Log rate limit violation
+   */
+  private logRateLimitViolation(
+    request: Request,
+    extendedResult: ExtendedRateLimitResult,
+    clientIp: string,
+  ): void {
+    this.logger.warn(
+      `Rate limit exceeded for ${clientIp} on ${request.method} ${request.url}`,
+      undefined,
+      {
+        ip: clientIp,
+        method: request.method,
+        url: request.url,
+        type: extendedResult.type,
+        currentCount: extendedResult.currentCount,
+        limit: extendedResult.limit,
+        remainingTime: extendedResult.remainingTime,
+      },
+    );
+  }
+
+  /**
+   * Log request processing error
+   */
+  private logRequestProcessingError(
+    error: unknown,
+    request: Request,
+    clientIp: string,
+  ): void {
+    if (error instanceof HttpException) {
+      this.logger.error(
+        `Request processing error for ${clientIp}`,
+        error.message,
+        undefined,
+        {
+          ip: clientIp,
+          method: request.method,
+          url: request.url,
+          error: error.message,
+          statusCode: error.getStatus(),
+        },
+      );
+    }
+  }
+
+  /**
+   * Log rate limit error
+   */
+  private logRateLimitError(error: unknown, request: Request): void {
+    this.logger.error(
+      `Rate limiting error for ${request.ip || 'unknown IP'}`,
+      undefined,
+      undefined,
+      {
+        ip: request.ip,
+        method: request.method,
+        url: request.url,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      },
+    );
+  }
+
+  /**
+   * Create rate limit error response
+   */
+  private createRateLimitErrorResponse(
+    request: Request,
+    extendedResult: ExtendedRateLimitResult,
+  ) {
+    return {
+      statusCode: HttpStatus.TOO_MANY_REQUESTS,
+      message: this.getRateLimitErrorMessage(extendedResult),
+      error: 'Too Many Requests',
+      timestamp: new Date().toISOString(),
+      path: request.url,
+      method: request.method,
+      rateLimitInfo: {
+        type: extendedResult.type,
+        currentCount: extendedResult.currentCount,
+        limit: extendedResult.limit,
+        remainingTime: extendedResult.remainingTime,
+        resetTime: extendedResult.resetTime,
+      },
+    };
+  }
+
+  /**
+   * Create generic rate limit error response
+   */
+  private createGenericRateLimitErrorResponse(request: Request) {
+    return {
+      statusCode: HttpStatus.TOO_MANY_REQUESTS,
+      message: 'Rate limiting service temporarily unavailable',
+      error: 'Too Many Requests',
+      timestamp: new Date().toISOString(),
+      path: request.url,
+      method: request.method,
+    };
   }
 
   /**

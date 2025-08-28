@@ -117,23 +117,31 @@ export class RateLimiterService implements OnModuleInit {
     try {
       // Resolve configuration
       const resolvedConfig = this.resolveConfiguration(options);
-      
+
       // Generate Redis key
       const key = this.generateKey(options.type, options.identifier);
-      
+
       // Process the request and get current count
-      const { currentCount, remainingTime } = await this.processRequest(key, resolvedConfig.ttl);
-      
+      const { currentCount, remainingTime } = await this.processRequest(
+        key,
+        resolvedConfig.ttl,
+      );
+
       // Calculate rate limit result
       const result = this.calculateRateLimitResult(
         currentCount,
         resolvedConfig,
-        remainingTime
+        remainingTime,
       );
-      
+
       // Log the rate limit check
-      this.logRateLimitCheck(options, currentCount, resolvedConfig.limit, result.isAllowed);
-      
+      this.logRateLimitCheck(
+        options,
+        currentCount,
+        resolvedConfig.limit,
+        result.isAllowed,
+      );
+
       return result;
     } catch (error) {
       // Resolve config again in case of error to ensure it's available
@@ -145,7 +153,9 @@ export class RateLimiterService implements OnModuleInit {
   /**
    * Resolve configuration for rate limiting based on options
    */
-  private resolveConfiguration(options: RateLimitOptions): RateLimitConfigResolved {
+  private resolveConfiguration(
+    options: RateLimitOptions,
+  ): RateLimitConfigResolved {
     const config = this.getConfigForType(options.type);
     return {
       ttl: options.customTtl || config.ttl,
@@ -156,9 +166,15 @@ export class RateLimiterService implements OnModuleInit {
   /**
    * Process the request and return current count and remaining time
    */
-  private async processRequest(key: string, ttl: number): Promise<{ currentCount: number; remainingTime: number }> {
+  private async processRequest(
+    key: string,
+    ttl: number,
+  ): Promise<{ currentCount: number; remainingTime: number }> {
     // Use optimized Redis pipeline for better performance
-    const pipelineResult = await this.redisService.processRateLimitRequest(key, ttl);
+    const pipelineResult = await this.redisService.processRateLimitRequest(
+      key,
+      ttl,
+    );
     return {
       currentCount: pipelineResult.currentCount,
       remainingTime: pipelineResult.remainingTime,
@@ -171,7 +187,7 @@ export class RateLimiterService implements OnModuleInit {
   private calculateRateLimitResult(
     currentCount: number,
     config: RateLimitConfigResolved,
-    remainingTime: number
+    remainingTime: number,
   ): RateLimitResult {
     const resetTime = new Date(Date.now() + remainingTime * 1000);
 
@@ -191,9 +207,12 @@ export class RateLimiterService implements OnModuleInit {
   private handleRateLimitError(
     error: unknown,
     options: RateLimitOptions,
-    config: RateLimitConfigResolved
+    config: RateLimitConfigResolved,
   ): RateLimitResult {
-    this.logger.error(`Rate limit check failed for ${options.identifier}`, error);
+    this.logger.error(
+      `Rate limit check failed for ${options.identifier}`,
+      error,
+    );
 
     // In case of Redis error, allow the request but log it
     return {
@@ -232,7 +251,9 @@ export class RateLimiterService implements OnModuleInit {
     try {
       // Use optimized Redis pipeline for better performance
       const statusResult = await this.redisService.getRateLimitStatus(key);
-      const resetTime = new Date(Date.now() + statusResult.remainingTime * 1000);
+      const resetTime = new Date(
+        Date.now() + statusResult.remainingTime * 1000,
+      );
 
       return {
         isAllowed: statusResult.currentCount < limit,
