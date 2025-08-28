@@ -11,6 +11,7 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3000
+      - APP_BASE_URL=${APP_BASE_URL}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=cv_scanner_dev_db
@@ -24,6 +25,13 @@ services:
       - REDIS_DB=0
       - REDIS_PASSWORD_FILE=/run/secrets/redis_password
       - REDIS_KEY_PREFIX=cv-scanner-dev
+      # Mailtrap / Mailer
+      - MAILTRAP_HOST=${MAILTRAP_HOST}
+      - MAILTRAP_PORT=${MAILTRAP_PORT}
+      - MAILTRAP_USER=${MAILTRAP_USER}
+      - MAILTRAP_PASS=${MAILTRAP_PASS}
+      - MAIL_FROM_EMAIL=${MAIL_FROM_EMAIL}
+      - MAIL_FROM_NAME=${MAIL_FROM_NAME}
       - LOG_LEVEL=debug
       - TYPEORM_MIGRATIONS_TS=0
     secrets:
