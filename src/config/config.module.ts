@@ -2,6 +2,8 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import * as Joi from 'joi';
 import { databaseConfig } from './database/database.config';
+import { authConfig } from './auth/auth.config';
+import { mailerConfig } from './mailer/mailer.config';
 import { redisConfig, redisConfigValidationSchema } from './redis/redis.config';
 import {
   rateLimiterConfig,
@@ -20,7 +22,13 @@ import {
             ? '.env.development'
             : '.env',
       ],
-      load: [databaseConfig, redisConfig, rateLimiterConfig],
+      load: [
+        databaseConfig,
+        redisConfig,
+        rateLimiterConfig,
+        authConfig,
+        mailerConfig,
+      ],
       validationSchema: Joi.object({
         NODE_ENV: Joi.string()
           .valid('development', 'test', 'production')
@@ -76,6 +84,21 @@ import {
           .truthy('true', '1', 'yes', 'on')
           .falsy('false', '0', 'no', 'off')
           .default(true),
+
+        // Auth
+        AUTH_BCRYPT_ROUNDS: Joi.number().integer().min(4).max(15).default(12),
+        AUTH_JWT_SECRET: Joi.string().required(),
+        AUTH_JWT_TTL: Joi.string().default('15m'),
+        AUTH_COOKIE_DOMAIN: Joi.string().optional(),
+        APP_BASE_URL: Joi.string().uri().required(),
+
+        // Mailer (Mailtrap)
+        MAILTRAP_HOST: Joi.string().required(),
+        MAILTRAP_PORT: Joi.number().port().required(),
+        MAILTRAP_USER: Joi.string().required(),
+        MAILTRAP_PASS: Joi.string().required(),
+        MAIL_FROM_EMAIL: Joi.string().email().default('no-reply@example.com'),
+        MAIL_FROM_NAME: Joi.string().default('CV Scanner'),
       })
         .concat(redisConfigValidationSchema)
         .concat(rateLimiterConfigValidationSchema),

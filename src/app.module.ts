@@ -8,6 +8,8 @@ import { DatabaseModule } from './config/database/database.module';
 import { SentryModule, SentryGlobalFilter } from '@sentry/nestjs/setup';
 import { APP_FILTER } from '@nestjs/core';
 import { RateLimiterModule } from './middlewares/rate-limiter';
+import { MailModule } from './mail/mail.module';
+import { AuthRoutesV1Module } from './routes/v1/auth/auth.routes.module';
 
 @Module({
   imports: [
@@ -17,6 +19,8 @@ import { RateLimiterModule } from './middlewares/rate-limiter';
     DatabaseModule,
     HealthModule,
     RateLimiterModule,
+    MailModule,
+    AuthRoutesV1Module,
   ],
   controllers: [AppController],
   providers: [
