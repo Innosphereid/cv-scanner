@@ -52,7 +52,15 @@ export class RegisterService {
       verified: false,
       tokenVersion: 1,
     });
-    await this.usersRepo.save(user);
+    try {
+      await this.usersRepo.save(user);
+    } catch (err: unknown) {
+      // Map Postgres unique violation to ConflictException for email uniqueness
+      if (isUniqueViolationError(err)) {
+        throw new ConflictException('Email already registered');
+      }
+      throw err;
+    }
 
     const { token, tokenHash, expiresAt } =
       this.generateEmailVerificationToken();
@@ -113,4 +121,13 @@ export class RegisterService {
     const hashed: string = await hashFn(password, rounds);
     return hashed;
   }
+}
+
+function isUniqueViolationError(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    (err as any).code === '23505'
+  );
 }
