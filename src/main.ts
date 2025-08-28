@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { RequestContextInterceptor } from './utils/responses/request-context.interceptor';
 import './instrument';
@@ -9,11 +10,9 @@ async function bootstrap() {
   const port = parseInt(process.env.PORT || '3000', 10);
   try {
     await app.listen(port, '0.0.0.0');
-    // eslint-disable-next-line no-console
-    console.log(`App listening on http://0.0.0.0:${port}`);
+    Logger.log(`App listening on http://0.0.0.0:${port}`, 'Bootstrap');
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error('Failed to start HTTP server:', err);
+    Logger.error('Failed to start HTTP server', (err as Error)?.stack);
     throw err;
   }
 }
