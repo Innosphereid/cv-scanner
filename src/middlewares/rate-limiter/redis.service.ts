@@ -399,9 +399,4 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       }
     }
   }
-
-  /**
-   * Legacy increment method (kept for backward compatibility)
-   * @deprecated Use processRateLimitRequest instead for better performance
-   */
 }
