@@ -36,7 +36,7 @@ describe('upload utils (integration to Cloudinary)', () => {
       const msg = typeof e?.message === 'string' ? e.message : String(e);
       if (msg.toLowerCase().includes('cloud_name is disabled') || e?.http_code === 401) {
         enabled = false;
-        // eslint-disable-next-line no-console
+         
         console.warn('[upload.spec] Cloudinary is disabled; skipping integration uploads');
       }
     }
@@ -44,7 +44,7 @@ describe('upload utils (integration to Cloudinary)', () => {
 
   it('should upload each file under @tests directory (public/images/tests)', async () => {
     if (!enabled) {
-      // eslint-disable-next-line no-console
+       
       console.warn('Cloudinary disabled; skipping single-file upload assertions');
       return;
     }
@@ -68,7 +68,7 @@ describe('upload utils (integration to Cloudinary)', () => {
       } catch (e: any) {
         const msg = typeof e?.message === 'string' ? e.message : String(e);
         if (msg.toLowerCase().includes('cloud_name is disabled') || e?.http_code === 401) {
-          // eslint-disable-next-line no-console
+           
           console.warn('Cloudinary disabled during upload; skipping');
           return;
         }
@@ -79,7 +79,7 @@ describe('upload utils (integration to Cloudinary)', () => {
 
   it('should upload batch and continue on errors', async () => {
     if (!enabled) {
-      // eslint-disable-next-line no-console
+       
       console.warn('Cloudinary disabled; skipping batch upload assertions');
       return;
     }
@@ -99,7 +99,7 @@ describe('upload utils (integration to Cloudinary)', () => {
     } catch (e: any) {
       const msg = typeof e?.message === 'string' ? e.message : String(e);
       if (msg.toLowerCase().includes('cloud_name is disabled') || e?.http_code === 401) {
-        // eslint-disable-next-line no-console
+         
         console.warn('Cloudinary disabled during batch; skipping');
         return;
       }

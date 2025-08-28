@@ -47,3 +47,6 @@ test/
 
 # Migration files
 src/database/migrations/*.ts
+
+# Documentation files
+docs/*

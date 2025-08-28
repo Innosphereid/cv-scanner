@@ -2,6 +2,11 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import * as Joi from 'joi';
 import { databaseConfig } from './database/database.config';
+import { redisConfig, redisConfigValidationSchema } from './redis/redis.config';
+import {
+  rateLimiterConfig,
+  rateLimiterConfigValidationSchema,
+} from './rate-limiter/rate-limiter.config';
 
 @Global()
 @Module({
@@ -15,7 +20,7 @@ import { databaseConfig } from './database/database.config';
             ? '.env.development'
             : '.env',
       ],
-      load: [databaseConfig],
+      load: [databaseConfig, redisConfig, rateLimiterConfig],
       validationSchema: Joi.object({
         NODE_ENV: Joi.string()
           .valid('development', 'test', 'production')
@@ -44,6 +49,18 @@ import { databaseConfig } from './database/database.config';
           .falsy('false', '0')
           .default(true),
 
+        // Redis Configuration
+        REDIS_HOST: Joi.string().default('localhost'),
+        REDIS_PORT: Joi.number().port().default(6379),
+        REDIS_PASSWORD: Joi.string().optional(),
+        REDIS_DB: Joi.number().integer().min(0).max(15).default(0),
+        REDIS_KEY_PREFIX: Joi.string().default('cv-scanner:'),
+        REDIS_RETRY_DELAY_ON_FAILOVER: Joi.number()
+          .integer()
+          .min(100)
+          .default(100),
+        REDIS_MAX_RETRIES_PER_REQUEST: Joi.number().integer().min(1).default(3),
+
         // Cloudinary
         CLOUDINARY_CLOUD_NAME: Joi.string().required(),
         CLOUDINARY_API_KEY: Joi.string().required(),
@@ -59,7 +76,9 @@ import { databaseConfig } from './database/database.config';
           .truthy('true', '1', 'yes', 'on')
           .falsy('false', '0', 'no', 'off')
           .default(true),
-      }),
+      })
+        .concat(redisConfigValidationSchema)
+        .concat(rateLimiterConfigValidationSchema),
     }),
   ],
 })

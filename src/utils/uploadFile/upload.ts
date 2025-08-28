@@ -56,7 +56,7 @@ export async function uploadSingle(
   const context = 'UploadSingle';
   const folderPrefix = options.folderPrefix;
   const idempotencyKey = options.idempotencyKey;
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
   const cloudinaryConfigOverride = options.cloudinaryConfigOverride;
   const resourceType = options.resourceType ?? 'auto';
   const maxAttempts = options.maxAttempts ?? 3;

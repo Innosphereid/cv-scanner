@@ -56,7 +56,7 @@ export class Logger implements LoggerService {
     this.logger = winston.createLogger(baseConfig);
 
     // Add error handling
-    // eslint-disable-next-line prettier/prettier
+
     this.logger.on('error', error => {
       console.error('Logger error:', error);
     });
@@ -104,49 +104,80 @@ export class Logger implements LoggerService {
   private getTransports(): TransportStream[] {
     const transports: TransportStream[] = [];
 
-    // Stream transports for all environments (use process streams to ease testing)
+    // Add stream transports for all environments
+    this.addStreamTransports(transports);
+
+    // Add file transports for production
+    if (!this.isDevelopment) {
+      this.addFileTransports(transports);
+    }
+
+    return transports;
+  }
+
+  /**
+   * Add stream-based transports (stdout/stderr)
+   */
+  private addStreamTransports(transports: TransportStream[]): void {
+    // Stream transport for general logs
     transports.push(
       new winston.transports.Stream({
         stream: process.stdout,
         level: this.isDevelopment ? LogLevel.DEBUG : LogLevel.INFO,
       }) as unknown as TransportStream,
     );
+
+    // Stream transport for error logs
     transports.push(
       new winston.transports.Stream({
         stream: process.stderr,
         level: LogLevel.ERROR,
       }) as unknown as TransportStream,
     );
+  }
 
-    // File transport for production
-    if (!this.isDevelopment) {
-      // Error logs
-      const errorFileOptions: DailyRotateFileOptions = {
-        filename: 'logs/error-%DATE%.log',
-        datePattern: 'YYYY-MM-DD',
-        level: 'error',
-        maxSize: '20m',
-        maxFiles: '14d', // Keep 14 days of error logs
-        zippedArchive: true,
-      };
+  /**
+   * Add file-based transports for production environment
+   */
+  private addFileTransports(transports: TransportStream[]): void {
+    // Error logs file transport
+    const errorTransport = this.createErrorFileTransport();
+    transports.push(errorTransport);
 
-      const errorRotate = new DailyRotateFileCtor(errorFileOptions);
-      transports.push(errorRotate);
+    // Combined logs file transport
+    const combinedTransport = this.createCombinedFileTransport();
+    transports.push(combinedTransport);
+  }
 
-      // Combined logs
-      const combinedFileOptions: DailyRotateFileOptions = {
-        filename: 'logs/combined-%DATE%.log',
-        datePattern: 'YYYY-MM-DD',
-        maxSize: '20m',
-        maxFiles: '30d', // Keep 30 days of combined logs
-        zippedArchive: true,
-      };
+  /**
+   * Create error log file transport
+   */
+  private createErrorFileTransport(): TransportStream {
+    const errorFileOptions: DailyRotateFileOptions = {
+      filename: 'logs/error-%DATE%.log',
+      datePattern: 'YYYY-MM-DD',
+      level: 'error',
+      maxSize: '20m',
+      maxFiles: '14d', // Keep 14 days of error logs
+      zippedArchive: true,
+    };
 
-      const combinedRotate = new DailyRotateFileCtor(combinedFileOptions);
-      transports.push(combinedRotate);
-    }
+    return new DailyRotateFileCtor(errorFileOptions);
+  }
 
-    return transports;
+  /**
+   * Create combined log file transport
+   */
+  private createCombinedFileTransport(): TransportStream {
+    const combinedFileOptions: DailyRotateFileOptions = {
+      filename: 'logs/combined-%DATE%.log',
+      datePattern: 'YYYY-MM-DD',
+      maxSize: '20m',
+      maxFiles: '30d', // Keep 30 days of combined logs
+      zippedArchive: true,
+    };
+
+    return new DailyRotateFileCtor(combinedFileOptions);
   }
 
   // Winston logger methods
