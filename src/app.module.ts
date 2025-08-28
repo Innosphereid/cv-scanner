@@ -8,6 +8,7 @@ import { DatabaseModule } from './config/database/database.module';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { APP_FILTER } from '@nestjs/core';
 import { SentryGlobalFilter } from '@sentry/nestjs/setup';
+import { RateLimiterModule } from './middlewares/rate-limiter';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { SentryGlobalFilter } from '@sentry/nestjs/setup';
     AppConfigModule,
     DatabaseModule,
     HealthModule,
+    RateLimiterModule,
   ],
   controllers: [AppController],
   providers: [

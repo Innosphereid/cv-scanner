@@ -24,6 +24,13 @@ services:
       - DB_IDLE_TIMEOUT=${DB_IDLE_TIMEOUT:-10000}
       - DB_CONN_TIMEOUT=${DB_CONN_TIMEOUT:-10000}
       - DB_LOGGING=${DB_LOGGING:-false}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD_FILE=/run/secrets/redis_password
+      - REDIS_KEY_PREFIX=cv-scanner-prod:
+      - REDIS_RETRY_DELAY_ON_FAILOVER=300
+      - REDIS_MAX_RETRIES_PER_REQUEST=5
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - LOG_FILE_ENABLED=${LOG_FILE_ENABLED:-true}
       - LOG_CONSOLE_ENABLED=${LOG_CONSOLE_ENABLED:-true}
@@ -32,11 +39,14 @@ services:
       - cloudinary_cloud_name
       - cloudinary_api_key
       - cloudinary_api_secret
+      - redis_password
     volumes:
       - app_logs:/app/logs
       - app_uploads:/app/uploads
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - cv-scanner-network
@@ -135,6 +145,29 @@ services:
     networks:
       - cv-scanner-network
 
+  # Redis Database
+  redis:
+    image: redis:7-alpine
+    container_name: cv-scanner-redis
+    restart: unless-stopped
+    environment:
+      - REDIS_PASSWORD_FILE=/run/secrets/redis_password
+    secrets:
+      - redis_password
+    volumes:
+      - redis_data:/data
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:-redis456prod}
+    networks:
+      - cv-scanner-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis456prod}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
 # Docker Secrets
 secrets:
   db_password:
@@ -145,6 +178,8 @@ secrets:
     file: ./secrets/cloudinary_api_key.txt
   cloudinary_api_secret:
     file: ./secrets/cloudinary_api_secret.txt
+  redis_password:
+    file: ./secrets/redis_password_prod.txt
 
 # Docker Volumes
 volumes:
@@ -155,6 +190,8 @@ volumes:
   app_uploads:
     driver: local
   elasticsearch_data:
+    driver: local
+  redis_data:
     driver: local
 
 # Docker Networks
