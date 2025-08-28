@@ -14,6 +14,9 @@ describe('RateLimiterService', () => {
     exists: jest.fn(),
     getTtl: jest.fn(),
     getClient: jest.fn(),
+    // Add new pipeline methods
+    processRateLimitRequest: jest.fn(),
+    getRateLimitStatus: jest.fn(),
   };
 
   const mockConfigService = {
@@ -58,18 +61,20 @@ describe('RateLimiterService', () => {
     it('should allow first request and set initial count', async () => {
       const options = { type: 'general' as const, identifier: '192.168.1.1' };
 
-      mockRedisService.get.mockResolvedValue(null);
-      mockRedisService.set.mockResolvedValue(undefined);
-      mockRedisService.getTtl.mockResolvedValue(60);
+      // Mock the new pipeline method
+      mockRedisService.processRateLimitRequest.mockResolvedValue({
+        currentCount: 1,
+        remainingTime: 60,
+        isNewKey: true,
+      });
 
       const result = await service.checkRateLimit(options);
 
       expect(result.isAllowed).toBe(true);
       expect(result.currentCount).toBe(1);
       expect(result.limit).toBe(100);
-      expect(mockRedisService.set).toHaveBeenCalledWith(
+      expect(mockRedisService.processRateLimitRequest).toHaveBeenCalledWith(
         'rate-limit:general:192.168.1.1',
-        1,
         60,
       );
     });
@@ -77,16 +82,19 @@ describe('RateLimiterService', () => {
     it('should increment existing count and allow request within limit', async () => {
       const options = { type: 'sensitive' as const, identifier: '192.168.1.1' };
 
-      mockRedisService.get.mockResolvedValue(15);
-      mockRedisService.increment.mockResolvedValue(16);
-      mockRedisService.getTtl.mockResolvedValue(45);
+      // Mock the new pipeline method
+      mockRedisService.processRateLimitRequest.mockResolvedValue({
+        currentCount: 16,
+        remainingTime: 45,
+        isNewKey: false,
+      });
 
       const result = await service.checkRateLimit(options);
 
       expect(result.isAllowed).toBe(true);
       expect(result.currentCount).toBe(16);
       expect(result.limit).toBe(30);
-      expect(mockRedisService.increment).toHaveBeenCalledWith(
+      expect(mockRedisService.processRateLimitRequest).toHaveBeenCalledWith(
         'rate-limit:sensitive:192.168.1.1',
         60,
       );
@@ -95,9 +103,12 @@ describe('RateLimiterService', () => {
     it('should deny request when limit exceeded', async () => {
       const options = { type: 'login' as const, identifier: '192.168.1.1' };
 
-      mockRedisService.get.mockResolvedValue(5);
-      mockRedisService.increment.mockResolvedValue(6);
-      mockRedisService.getTtl.mockResolvedValue(240);
+      // Mock the new pipeline method with exceeded limit
+      mockRedisService.processRateLimitRequest.mockResolvedValue({
+        currentCount: 6,
+        remainingTime: 240,
+        isNewKey: false,
+      });
 
       const result = await service.checkRateLimit(options);
 
@@ -114,17 +125,19 @@ describe('RateLimiterService', () => {
         customLimit: 50,
       };
 
-      mockRedisService.get.mockResolvedValue(null);
-      mockRedisService.set.mockResolvedValue(undefined);
-      mockRedisService.getTtl.mockResolvedValue(120);
+      // Mock the new pipeline method
+      mockRedisService.processRateLimitRequest.mockResolvedValue({
+        currentCount: 1,
+        remainingTime: 120,
+        isNewKey: true,
+      });
 
       const result = await service.checkRateLimit(options);
 
       expect(result.limit).toBe(50);
       expect(result.ttl).toBe(120);
-      expect(mockRedisService.set).toHaveBeenCalledWith(
+      expect(mockRedisService.processRateLimitRequest).toHaveBeenCalledWith(
         'rate-limit:general:192.168.1.1',
-        1,
         120,
       );
     });
@@ -132,7 +145,7 @@ describe('RateLimiterService', () => {
     it('should handle Redis errors gracefully', async () => {
       const options = { type: 'general' as const, identifier: '192.168.1.1' };
 
-      mockRedisService.get.mockRejectedValue(new Error('Redis connection failed'));
+      mockRedisService.processRateLimitRequest.mockRejectedValue(new Error('Redis connection failed'));
 
       const result = await service.checkRateLimit(options);
 
@@ -173,28 +186,40 @@ describe('RateLimiterService', () => {
       const key = 'rate-limit:general:192.168.1.1';
       const ttl = 60;
 
-      mockRedisService.get.mockResolvedValue(null);
-      mockRedisService.set.mockResolvedValue(undefined);
+      // Mock the new pipeline method
+      mockRedisService.processRateLimitRequest.mockResolvedValue({
+        currentCount: 1,
+        remainingTime: 60,
+        isNewKey: true,
+      });
 
       const result = await (service as any).processRequest(key, ttl);
 
-      expect(result).toBe(1);
-      expect(mockRedisService.set).toHaveBeenCalledWith(key, 1, ttl);
-      expect(mockRedisService.get).toHaveBeenCalledWith(key);
+      expect(result).toEqual({
+        currentCount: 1,
+        remainingTime: 60,
+      });
+      expect(mockRedisService.processRateLimitRequest).toHaveBeenCalledWith(key, ttl);
     });
 
     it('should handle existing request correctly', async () => {
       const key = 'rate-limit:general:192.168.1.1';
       const ttl = 60;
 
-      mockRedisService.get.mockResolvedValue(5);
-      mockRedisService.increment.mockResolvedValue(6);
+      // Mock the new pipeline method
+      mockRedisService.processRateLimitRequest.mockResolvedValue({
+        currentCount: 6,
+        remainingTime: 45,
+        isNewKey: false,
+      });
 
       const result = await (service as any).processRequest(key, ttl);
 
-      expect(result).toBe(6);
-      expect(mockRedisService.increment).toHaveBeenCalledWith(key, ttl);
-      expect(mockRedisService.get).toHaveBeenCalledWith(key);
+      expect(result).toEqual({
+        currentCount: 6,
+        remainingTime: 45,
+      });
+      expect(mockRedisService.processRateLimitRequest).toHaveBeenCalledWith(key, ttl);
     });
   });
 
@@ -202,14 +227,12 @@ describe('RateLimiterService', () => {
     it('should calculate result correctly for allowed request', async () => {
       const currentCount = 5;
       const config = { ttl: 60, limit: 100 };
-      const identifier = '192.168.1.1';
+      const remainingTime = 45;
 
-      mockRedisService.getTtl.mockResolvedValue(45);
-
-      const result = await (service as any).calculateRateLimitResult(
+      const result = (service as any).calculateRateLimitResult(
         currentCount,
         config,
-        identifier
+        remainingTime
       );
 
       expect(result.isAllowed).toBe(true);
@@ -223,14 +246,12 @@ describe('RateLimiterService', () => {
     it('should calculate result correctly for blocked request', async () => {
       const currentCount = 101;
       const config = { ttl: 60, limit: 100 };
-      const identifier = '192.168.1.1';
+      const remainingTime = 30;
 
-      mockRedisService.getTtl.mockResolvedValue(30);
-
-      const result = await (service as any).calculateRateLimitResult(
+      const result = (service as any).calculateRateLimitResult(
         currentCount,
         config,
-        identifier
+        remainingTime
       );
 
       expect(result.isAllowed).toBe(false);
@@ -260,15 +281,20 @@ describe('RateLimiterService', () => {
     it('should return status without incrementing count', async () => {
       const options = { type: 'general' as const, identifier: '192.168.1.1' };
 
-      mockRedisService.get.mockResolvedValue(25);
-      mockRedisService.getTtl.mockResolvedValue(30);
+      // Mock the new pipeline method
+      mockRedisService.getRateLimitStatus.mockResolvedValue({
+        currentCount: 25,
+        remainingTime: 30,
+      });
 
       const result = await service.getRateLimitStatus(options);
 
       expect(result.isAllowed).toBe(true);
       expect(result.currentCount).toBe(25);
       expect(result.limit).toBe(100);
-      expect(mockRedisService.increment).not.toHaveBeenCalled();
+      expect(mockRedisService.getRateLimitStatus).toHaveBeenCalledWith(
+        'rate-limit:general:192.168.1.1'
+      );
     });
   });
 

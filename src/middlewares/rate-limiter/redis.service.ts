@@ -18,6 +18,12 @@ interface RedisConfig {
   enableOfflineQueue: boolean;
 }
 
+export interface RateLimitPipelineResult {
+  currentCount: number;
+  remainingTime: number;
+  isNewKey: boolean;
+}
+
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly redis: Redis;
@@ -185,4 +191,177 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       throw error;
     }
   }
+
+  /**
+   * Batch process multiple rate limit requests using pipeline
+   * Useful for bulk operations or analytics
+   */
+  async batchProcessRateLimitRequests(
+    requests: Array<{ key: string; ttl: number }>
+  ): Promise<RateLimitPipelineResult[]> {
+    if (requests.length === 0) {
+      return [];
+    }
+
+    try {
+      const pipeline = this.redis.pipeline();
+      
+      // Add commands for each request
+      requests.forEach(({ key, ttl }) => {
+        pipeline.get(key);           // Get current count
+        pipeline.ttl(key);           // Get current TTL
+        pipeline.incr(key);          // Increment count
+        pipeline.expire(key, ttl);   // Set/refresh TTL
+      });
+      
+      // Execute all commands in single round-trip
+      const results = await pipeline.exec();
+      
+      if (!results) {
+        throw new Error('Redis batch pipeline execution failed - no results returned');
+      }
+
+      // Validate results
+      this.validateBatchPipelineResults(results, requests.length);
+
+      // Process results in groups of 4 (get, ttl, incr, expire for each request)
+      const processedResults: RateLimitPipelineResult[] = [];
+      
+      for (let i = 0; i < requests.length; i++) {
+        const baseIndex = i * 4;
+        const currentCount = results[baseIndex + 2][1] as number; // incr result
+        const remainingTime = results[baseIndex + 1][1] as number; // ttl result
+        const isNewKey = results[baseIndex][1] === null; // get result
+
+        processedResults.push({
+          currentCount,
+          remainingTime: remainingTime > 0 ? remainingTime : requests[i].ttl,
+          isNewKey,
+        });
+      }
+
+      return processedResults;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Batch rate limit pipeline failed for ${requests.length} requests`, errorMessage);
+      throw error;
+    }
+  }
+
+  /**
+   * Validate batch pipeline execution results
+   */
+  private validateBatchPipelineResults(results: any[], requestCount: number): void {
+    const expectedCommands = requestCount * 4; // 4 commands per request
+    
+    if (results.length !== expectedCommands) {
+      throw new Error(`Expected ${expectedCommands} results, got ${results.length}`);
+    }
+
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      if (!result || result[0]) {
+        const errorMessage = result?.[0]?.message || 'Unknown error';
+        const requestIndex = Math.floor(i / 4);
+        throw new Error(`Redis batch pipeline command ${i} failed for request ${requestIndex}: ${errorMessage}`);
+      }
+    }
+  }
+
+  /**
+   * Optimized rate limit operation using Redis pipeline
+   * Reduces multiple round-trips to a single pipeline execution
+   */
+  async processRateLimitRequest(key: string, ttl: number): Promise<RateLimitPipelineResult> {
+    try {
+      const pipeline = this.redis.pipeline();
+      
+      // Add commands to pipeline
+      pipeline.get(key);           // Get current count
+      pipeline.ttl(key);           // Get current TTL
+      pipeline.incr(key);          // Increment count
+      pipeline.expire(key, ttl);   // Set/refresh TTL
+      
+      // Execute all commands in single round-trip
+      const results = await pipeline.exec();
+      
+      if (!results) {
+        throw new Error('Redis pipeline execution failed - no results returned');
+      }
+
+      // Validate results
+      this.validatePipelineResults(results, key);
+
+      // Extract results from pipeline
+      const currentCount = results[2][1] as number; // incr result
+      const remainingTime = results[1][1] as number; // ttl result
+      const isNewKey = results[0][1] === null; // get result
+
+      return {
+        currentCount,
+        remainingTime: remainingTime > 0 ? remainingTime : ttl,
+        isNewKey,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Rate limit pipeline failed for key: ${key}`, errorMessage);
+      throw error;
+    }
+  }
+
+  /**
+   * Get rate limit status without incrementing (read-only operations)
+   * Uses pipeline for efficiency
+   */
+  async getRateLimitStatus(key: string): Promise<{ currentCount: number; remainingTime: number }> {
+    try {
+      const pipeline = this.redis.pipeline();
+      
+      // Add read-only commands to pipeline
+      pipeline.get(key);    // Get current count
+      pipeline.ttl(key);    // Get current TTL
+      
+      // Execute commands in single round-trip
+      const results = await pipeline.exec();
+      
+      if (!results) {
+        throw new Error('Redis pipeline execution failed - no results returned');
+      }
+
+      // Validate results
+      this.validatePipelineResults(results, key);
+
+      // Extract results
+      const currentCount = results[0][1] ? parseInt(results[0][1] as string, 10) : 0;
+      const remainingTime = results[1][1] as number;
+
+      return {
+        currentCount,
+        remainingTime: remainingTime > 0 ? remainingTime : 0,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Rate limit status pipeline failed for key: ${key}`, errorMessage);
+      throw error;
+    }
+  }
+
+  /**
+   * Validate pipeline execution results
+   */
+  private validatePipelineResults(results: any[], key: string): void {
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      if (!result || result[0]) {
+        // result[0] contains error if any
+        const errorMessage = result?.[0]?.message || 'Unknown error';
+        throw new Error(`Redis pipeline command ${i} failed for key ${key}: ${errorMessage}`);
+      }
+    }
+  }
+
+  /**
+   * Legacy increment method (kept for backward compatibility)
+   * @deprecated Use processRateLimitRequest instead for better performance
+   */
 }

@@ -122,13 +122,13 @@ export class RateLimiterService implements OnModuleInit {
       const key = this.generateKey(options.type, options.identifier);
       
       // Process the request and get current count
-      const currentCount = await this.processRequest(key, resolvedConfig.ttl);
+      const { currentCount, remainingTime } = await this.processRequest(key, resolvedConfig.ttl);
       
       // Calculate rate limit result
-      const result = await this.calculateRateLimitResult(
+      const result = this.calculateRateLimitResult(
         currentCount,
         resolvedConfig,
-        options.identifier
+        remainingTime
       );
       
       // Log the rate limit check
@@ -154,31 +154,25 @@ export class RateLimiterService implements OnModuleInit {
   }
 
   /**
-   * Process the request and return current count
+   * Process the request and return current count and remaining time
    */
-  private async processRequest(key: string, ttl: number): Promise<number> {
-    const currentCount = await this.redisService.get(key);
-    
-    if (currentCount === null) {
-      // First request, set initial count
-      await this.redisService.set(key, 1, ttl);
-      return 1;
-    } else {
-      // Increment existing count
-      return await this.redisService.increment(key, ttl);
-    }
+  private async processRequest(key: string, ttl: number): Promise<{ currentCount: number; remainingTime: number }> {
+    // Use optimized Redis pipeline for better performance
+    const pipelineResult = await this.redisService.processRateLimitRequest(key, ttl);
+    return {
+      currentCount: pipelineResult.currentCount,
+      remainingTime: pipelineResult.remainingTime,
+    };
   }
 
   /**
    * Calculate rate limit result based on current count and configuration
    */
-  private async calculateRateLimitResult(
+  private calculateRateLimitResult(
     currentCount: number,
     config: RateLimitConfigResolved,
-    identifier: string
-  ): Promise<RateLimitResult> {
-    const key = this.generateKey('temp', identifier); // Temporary key for TTL check
-    const remainingTime = await this.redisService.getTtl(key);
+    remainingTime: number
+  ): RateLimitResult {
     const resetTime = new Date(Date.now() + remainingTime * 1000);
 
     return {
@@ -236,16 +230,16 @@ export class RateLimiterService implements OnModuleInit {
     const key = this.generateKey(type, identifier);
 
     try {
-      const currentCount = (await this.redisService.get(key)) || 0;
-      const remainingTime = await this.redisService.getTtl(key);
-      const resetTime = new Date(Date.now() + remainingTime * 1000);
+      // Use optimized Redis pipeline for better performance
+      const statusResult = await this.redisService.getRateLimitStatus(key);
+      const resetTime = new Date(Date.now() + statusResult.remainingTime * 1000);
 
       return {
-        isAllowed: currentCount < limit,
-        currentCount,
+        isAllowed: statusResult.currentCount < limit,
+        currentCount: statusResult.currentCount,
         limit,
         ttl,
-        remainingTime,
+        remainingTime: statusResult.remainingTime,
         resetTime,
       };
     } catch (error) {
