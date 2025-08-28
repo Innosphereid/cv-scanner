@@ -18,6 +18,9 @@ interface RedisConfig {
   enableOfflineQueue: boolean;
 }
 
+// Redis pipeline result type: [error, result]
+type RedisPipelineResult = [Error | null, any];
+
 export interface RateLimitPipelineResult {
   currentCount: number;
   remainingTime: number;
@@ -59,7 +62,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.logger.log('Redis connected successfully');
     });
 
-    this.redis.on('error', error => {
+    this.redis.on('error', (error: any) => {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
       this.logger.error('Redis connection error', errorMessage);
@@ -258,7 +261,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    * Validate batch pipeline execution results
    */
   private validateBatchPipelineResults(
-    results: any[],
+    results: RedisPipelineResult[],
     requestCount: number,
   ): void {
     const expectedCommands = requestCount * 4; // 4 commands per request
@@ -311,9 +314,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.validatePipelineResults(results, key);
 
       // Extract results from pipeline
-      const currentCount = results[2][1] as number; // incr result
-      const remainingTime = results[1][1] as number; // ttl result
-      const isNewKey = results[0][1] === null; // get result
+      const currentCount = (results[2] as RedisPipelineResult)[1] as number; // incr result
+      const remainingTime = (results[1] as RedisPipelineResult)[1] as number; // ttl result
+      const isNewKey = (results[0] as RedisPipelineResult)[1] === null; // get result
 
       return {
         currentCount,
@@ -358,10 +361,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.validatePipelineResults(results, key);
 
       // Extract results
-      const currentCount = results[0][1]
-        ? parseInt(results[0][1] as string, 10)
+      const currentCount = (results[0] as RedisPipelineResult)[1]
+        ? parseInt((results[0] as RedisPipelineResult)[1] as string, 10)
         : 0;
-      const remainingTime = results[1][1] as number;
+      const remainingTime = (results[1] as RedisPipelineResult)[1] as number;
 
       return {
         currentCount,
@@ -381,7 +384,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   /**
    * Validate pipeline execution results
    */
-  private validatePipelineResults(results: any[], key: string): void {
+  private validatePipelineResults(
+    results: RedisPipelineResult[],
+    key: string,
+  ): void {
     for (let i = 0; i < results.length; i++) {
       const result = results[i];
       if (!result || result[0]) {
