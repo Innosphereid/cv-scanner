@@ -1,4 +1,5 @@
 import { registerAs } from '@nestjs/config';
+import * as fs from 'fs';
 
 export interface DatabaseConfig {
   host: string;
@@ -22,7 +23,7 @@ export const databaseConfig = registerAs(
     port: Number(process.env.DB_PORT ?? 5432),
     name: process.env.DB_NAME ?? 'app_db',
     user: process.env.DB_USER ?? 'postgres',
-    password: process.env.DB_PASSWORD ?? '',
+    password: resolveDbPassword(),
     schema: process.env.DB_SCHEMA ?? 'public',
     ssl: parseBoolean(process.env.DB_SSL, false),
     rejectUnauthorized: parseBoolean(process.env.DB_REJECT_UNAUTHORIZED, true),
@@ -43,4 +44,19 @@ function parseBoolean(value: unknown, defaultValue: boolean): boolean {
     if (['false', '0', 'no', 'n', 'off'].includes(v)) return false;
   }
   return defaultValue;
+}
+
+function resolveDbPassword(): string {
+  const envPass = process.env.DB_PASSWORD;
+  if (typeof envPass === 'string' && envPass.length > 0) return envPass;
+  const file = process.env.DB_PASSWORD_FILE;
+  if (file && fs.existsSync(file)) {
+    try {
+      const val = fs.readFileSync(file, 'utf8').trim();
+      return val;
+    } catch {
+      return '';
+    }
+  }
+  return '';
 }

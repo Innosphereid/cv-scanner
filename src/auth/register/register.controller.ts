@@ -20,7 +20,7 @@ import { Request } from 'express';
 import { RequestContextInterceptor } from '../../utils/responses/request-context.interceptor';
 import { RequestMetadata } from '../../utils/responses/types';
 
-@Controller('auth')
+@Controller()
 @UseInterceptors(RateLimitInterceptor, RequestContextInterceptor)
 export class RegisterController {
   constructor(private readonly registerService: RegisterService) {}
