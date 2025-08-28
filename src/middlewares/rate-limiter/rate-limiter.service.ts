@@ -42,7 +42,7 @@ export class RateLimiterService implements OnModuleInit {
     }
   }
 
-  async onModuleInit() {
+  onModuleInit() {
     // Validate configuration on startup
     this.validateConfiguration();
     this.logger.log('Rate limiter service initialized with configuration', {

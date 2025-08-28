@@ -56,7 +56,7 @@ export class Logger implements LoggerService {
     this.logger = winston.createLogger(baseConfig);
 
     // Add error handling
-    // eslint-disable-next-line prettier/prettier
+
     this.logger.on('error', error => {
       console.error('Logger error:', error);
     });

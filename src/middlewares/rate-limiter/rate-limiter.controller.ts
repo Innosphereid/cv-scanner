@@ -7,14 +7,12 @@ import {
   HttpStatus,
   Logger,
   UseInterceptors,
-  Query,
   Param,
 } from '@nestjs/common';
 import { RateLimiterService } from './rate-limiter.service';
 import {
   RateLimit,
   RateLimitLogin,
-  RateLimitSensitive,
   RateLimitUpload,
 } from './rate-limit.decorator';
 import { RateLimitInterceptor } from './rate-limit.interceptor';
@@ -31,7 +29,7 @@ export class RateLimiterController {
    */
   @Get('test/general')
   @RateLimit({ type: 'general' })
-  async testGeneralRateLimit() {
+  testGeneralRateLimit() {
     this.logger.log('General rate limit test endpoint accessed');
     return {
       message: 'General rate limit test successful',
@@ -45,7 +43,7 @@ export class RateLimiterController {
    */
   @Get('test/sensitive')
   @RateLimit({ type: 'sensitive' })
-  async testSensitiveRateLimit() {
+  testSensitiveRateLimit() {
     this.logger.log('Sensitive rate limit test endpoint accessed');
     return {
       message: 'Sensitive rate limit test successful',
@@ -60,7 +58,7 @@ export class RateLimiterController {
   @Post('test/login')
   @HttpCode(HttpStatus.OK)
   @RateLimitLogin()
-  async testLoginRateLimit() {
+  testLoginRateLimit() {
     this.logger.log('Login rate limit test endpoint accessed');
     return {
       message: 'Login rate limit test successful',
@@ -75,7 +73,7 @@ export class RateLimiterController {
   @Post('test/upload')
   @HttpCode(HttpStatus.OK)
   @RateLimitUpload()
-  async testUploadRateLimit() {
+  testUploadRateLimit() {
     this.logger.log('Upload rate limit test endpoint accessed');
     return {
       message: 'Upload rate limit test successful',
@@ -89,7 +87,7 @@ export class RateLimiterController {
    */
   @Get('test/custom')
   @RateLimit({ type: 'general', customTtl: 30, customLimit: 5 })
-  async testCustomRateLimit() {
+  testCustomRateLimit() {
     this.logger.log('Custom rate limit test endpoint accessed');
     return {
       message: 'Custom rate limit test successful (5 requests per 30 seconds)',
@@ -110,7 +108,7 @@ export class RateLimiterController {
   ) {
     try {
       const status = await this.rateLimiterService.getRateLimitStatus({
-        type: type as any,
+        type: type as 'general' | 'sensitive' | 'login' | 'upload',
         identifier,
       });
 
@@ -155,7 +153,7 @@ export class RateLimiterController {
    * Get semua konfigurasi rate limiter
    */
   @Get('config')
-  async getRateLimitConfig() {
+  getRateLimitConfig() {
     const config = this.rateLimiterService.getConfigurations();
     return {
       configurations: config,
@@ -181,7 +179,7 @@ export class RateLimiterController {
       return {
         status: 'unhealthy',
         redis: 'error',
-        error: error.message,
+        error: error instanceof Error ? error.message : 'Unknown error',
         timestamp: new Date().toISOString(),
       };
     }

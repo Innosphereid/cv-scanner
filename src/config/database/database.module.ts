@@ -9,7 +9,7 @@ import { DatabaseConnectionLogger } from './database.connection-logger';
 @Module({
   imports: [
     ConfigModule.forFeature(databaseConfig),
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule.forFeature(databaseConfig)],
       inject: [databaseConfig.KEY],

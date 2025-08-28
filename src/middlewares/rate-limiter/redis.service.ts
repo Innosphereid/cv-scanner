@@ -3,13 +3,28 @@ import { ConfigService } from '@nestjs/config';
 import Redis, { RedisOptions } from 'ioredis';
 import { Logger } from '../../utils/logger';
 
+interface RedisConfig {
+  host: string;
+  port: number;
+  password?: string;
+  db: number;
+  keyPrefix: string;
+  maxRetriesPerRequest: number;
+  lazyConnect: boolean;
+  keepAlive: number;
+  family: number;
+  connectTimeout: number;
+  commandTimeout: number;
+  enableOfflineQueue: boolean;
+}
+
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly redis: Redis;
   private readonly logger = new Logger();
 
   constructor(private readonly configService: ConfigService) {
-    const redisConfig = this.configService.get('redis');
+    const redisConfig = this.configService.get<RedisConfig>('redis');
 
     if (!redisConfig) {
       throw new Error('Redis configuration not found');

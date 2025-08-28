@@ -11,8 +11,12 @@ import { Reflector } from '@nestjs/core';
 import { Request, Response } from 'express';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
-import { RateLimiterService, RateLimitOptions } from './rate-limiter.service';
+import { RateLimiterService, RateLimitResult } from './rate-limiter.service';
 import { RATE_LIMIT_KEY, RateLimitMetadata } from './rate-limit.decorator';
+
+interface ExtendedRateLimitResult extends RateLimitResult {
+  type: string;
+}
 
 @Injectable()
 export class RateLimitInterceptor implements NestInterceptor {
@@ -53,10 +57,16 @@ export class RateLimitInterceptor implements NestInterceptor {
         customLimit: rateLimitMetadata.customLimit,
       });
 
+      // Create extended result with type information
+      const extendedResult: ExtendedRateLimitResult = {
+        ...rateLimitResult,
+        type: rateLimitMetadata.type,
+      };
+
       // If rate limit exceeded, return error
-      if (!rateLimitResult.isAllowed) {
+      if (!extendedResult.isAllowed) {
         // Set rate limit headers
-        this.setRateLimitHeaders(response, rateLimitResult);
+        this.setRateLimitHeaders(response, extendedResult);
 
         // Log the violation
         this.logger.warn(
@@ -65,10 +75,10 @@ export class RateLimitInterceptor implements NestInterceptor {
             ip: clientIp,
             method: request.method,
             url: request.url,
-            type: rateLimitMetadata.type,
-            currentCount: rateLimitResult.currentCount,
-            limit: rateLimitResult.limit,
-            remainingTime: rateLimitResult.remainingTime,
+            type: extendedResult.type,
+            currentCount: extendedResult.currentCount,
+            limit: extendedResult.limit,
+            remainingTime: extendedResult.remainingTime,
           },
         );
 
@@ -76,17 +86,17 @@ export class RateLimitInterceptor implements NestInterceptor {
         throw new HttpException(
           {
             statusCode: HttpStatus.TOO_MANY_REQUESTS,
-            message: this.getRateLimitErrorMessage(rateLimitResult),
+            message: this.getRateLimitErrorMessage(extendedResult),
             error: 'Too Many Requests',
             timestamp: new Date().toISOString(),
             path: request.url,
             method: request.method,
             rateLimitInfo: {
-              type: rateLimitMetadata.type,
-              currentCount: rateLimitResult.currentCount,
-              limit: rateLimitResult.limit,
-              remainingTime: rateLimitResult.remainingTime,
-              resetTime: rateLimitResult.resetTime,
+              type: extendedResult.type,
+              currentCount: extendedResult.currentCount,
+              limit: extendedResult.limit,
+              remainingTime: extendedResult.remainingTime,
+              resetTime: extendedResult.resetTime,
             },
           },
           HttpStatus.TOO_MANY_REQUESTS,
@@ -94,11 +104,11 @@ export class RateLimitInterceptor implements NestInterceptor {
       }
 
       // Set rate limit headers for successful requests
-      this.setRateLimitHeaders(response, rateLimitResult);
+      this.setRateLimitHeaders(response, extendedResult);
 
       // Proceed with the request
       return next.handle().pipe(
-        catchError(error => {
+        catchError((error: unknown) => {
           // Log any errors that occur during request processing
           if (error instanceof HttpException) {
             this.logger.error(`Request processing error for ${clientIp}`, {
@@ -120,7 +130,7 @@ export class RateLimitInterceptor implements NestInterceptor {
           ip: request.ip,
           method: request.method,
           url: request.url,
-          error: error.message,
+          error: error instanceof Error ? error.message : 'Unknown error',
         },
       );
 
@@ -168,7 +178,10 @@ export class RateLimitInterceptor implements NestInterceptor {
   /**
    * Set rate limit headers on response
    */
-  private setRateLimitHeaders(response: Response, rateLimitResult: any): void {
+  private setRateLimitHeaders(
+    response: Response,
+    rateLimitResult: ExtendedRateLimitResult,
+  ): void {
     response.setHeader('X-RateLimit-Limit', rateLimitResult.limit);
     response.setHeader(
       'X-RateLimit-Remaining',
@@ -188,8 +201,10 @@ export class RateLimitInterceptor implements NestInterceptor {
   /**
    * Generate user-friendly error message based on rate limit result
    */
-  private getRateLimitErrorMessage(rateLimitResult: any): string {
-    const { type, currentCount, limit, remainingTime } = rateLimitResult;
+  private getRateLimitErrorMessage(
+    rateLimitResult: ExtendedRateLimitResult,
+  ): string {
+    const { type, limit, remainingTime } = rateLimitResult;
 
     const timeUnit = remainingTime >= 60 ? 'minutes' : 'seconds';
     const timeValue =

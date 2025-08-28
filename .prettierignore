@@ -49,4 +49,4 @@ test/
 src/database/migrations/*.ts
 
 # Documentation files
-docs/
+docs/*
