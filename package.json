@@ -21,6 +21,7 @@
     "migration:generate": "dotenv -e .env.development -- ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:generate ./src/migrations/auto -d ./src/config/orm-datasource.ts",
     "migration:create": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:create ./src/migrations/manual",
     "migration:run": "dotenv -e .env -- ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run -d ./src/config/orm-datasource.ts",
+    "migration:run:dev": "dotenv -e .env.development -- ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run -d ./src/config/orm-datasource.ts",
     "migration:revert": "dotenv -e .env -- ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:revert -d ./src/config/orm-datasource.ts",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",

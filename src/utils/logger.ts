@@ -1,11 +1,19 @@
 import * as winston from 'winston';
 import * as DailyRotateFileNS from 'winston-daily-rotate-file';
-import { type DailyRotateFileOptions } from 'winston-daily-rotate-file';
 import TransportStream from 'winston-transport';
 // Create a runtime-safe constructor that works for both CJS and ESM builds
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+type RotateFileOptions = {
+  filename: string;
+  datePattern?: string;
+  level?: string;
+  maxSize?: string | number;
+  maxFiles?: string | number;
+  zippedArchive?: boolean;
+};
+
 const DailyRotateFileCtor: new (
-  options?: DailyRotateFileOptions,
+  options?: RotateFileOptions,
 ) => TransportStream =
   // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   (DailyRotateFileNS as any).default ?? (DailyRotateFileNS as any);
@@ -153,7 +161,7 @@ export class Logger implements LoggerService {
    * Create error log file transport
    */
   private createErrorFileTransport(): TransportStream {
-    const errorFileOptions: DailyRotateFileOptions = {
+    const errorFileOptions: RotateFileOptions = {
       filename: 'logs/error-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
       level: 'error',
@@ -169,7 +177,7 @@ export class Logger implements LoggerService {
    * Create combined log file transport
    */
   private createCombinedFileTransport(): TransportStream {
-    const combinedFileOptions: DailyRotateFileOptions = {
+    const combinedFileOptions: RotateFileOptions = {
       filename: 'logs/combined-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
       maxSize: '20m',
