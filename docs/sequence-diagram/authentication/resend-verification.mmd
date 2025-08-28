@@ -1,0 +1,30 @@
+sequenceDiagram
+    autonumber
+    participant C as "Client"
+    participant A as "API (Auth Controller/Service)"
+    participant D as "DB (Users, VerifTokens)"
+    participant Q as "Queue (Jobs)"
+    participant M as "Mailer (Mailtrap)"
+
+    C->>A: POST /api/v1/auth/resend-verification
+    A->>D: Get user by auth context/cookie
+    alt Not authenticated
+      A-->>C: 401 Unauthorized
+    else Authenticated
+      alt Already verified
+        A-->>C: 409 Conflict (Email already verified)
+      else Not verified
+        A->>D: Check resend rate limit (3/day per user)
+        alt Exceeded
+          A-->>C: 429 Too Many Requests (Try later)
+        else OK
+          A->>A: Invalidate previous verification tokens
+          A->>A: Generate new token (5 min, single-use)
+          A->>Q: Enqueue SendVerificationEmail(user, token)
+          Q->>M: Send email
+          A-->>C: 200 OK (Verification email sent)
+        end
+      end
+    end
+
+
