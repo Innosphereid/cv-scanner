@@ -106,18 +106,7 @@ describe('RateLimiterService', () => {
       expect(result.limit).toBe(5);
     });
 
-    it('should handle Redis errors gracefully', async () => {
-      const options = { type: 'general' as const, identifier: '192.168.1.1' };
-
-      mockRedisService.get.mockRejectedValue(new Error('Redis connection failed'));
-
-      const result = await service.checkRateLimit(options);
-
-      expect(result.isAllowed).toBe(true); // Fallback to allow
-      expect(result.currentCount).toBe(0);
-    });
-
-    it('should use custom TTL and limit when provided', async () => {
+    it('should handle custom TTL and limit', async () => {
       const options = {
         type: 'general' as const,
         identifier: '192.168.1.1',
@@ -131,35 +120,161 @@ describe('RateLimiterService', () => {
 
       const result = await service.checkRateLimit(options);
 
-      expect(result.ttl).toBe(120);
       expect(result.limit).toBe(50);
+      expect(result.ttl).toBe(120);
       expect(mockRedisService.set).toHaveBeenCalledWith(
         'rate-limit:general:192.168.1.1',
         1,
         120,
       );
     });
+
+    it('should handle Redis errors gracefully', async () => {
+      const options = { type: 'general' as const, identifier: '192.168.1.1' };
+
+      mockRedisService.get.mockRejectedValue(new Error('Redis connection failed'));
+
+      const result = await service.checkRateLimit(options);
+
+      expect(result.isAllowed).toBe(true); // Fallback to allow
+      expect(result.currentCount).toBe(0);
+      expect(result.limit).toBe(100);
+    });
+  });
+
+  describe('resolveConfiguration', () => {
+    it('should return default config when no custom values provided', () => {
+      const options = { type: 'sensitive' as const, identifier: '192.168.1.1' };
+      
+      // Access private method through any type
+      const result = (service as any).resolveConfiguration(options);
+      
+      expect(result.ttl).toBe(60);
+      expect(result.limit).toBe(30);
+    });
+
+    it('should return custom config when provided', () => {
+      const options = {
+        type: 'sensitive' as const,
+        identifier: '192.168.1.1',
+        customTtl: 300,
+        customLimit: 100,
+      };
+      
+      const result = (service as any).resolveConfiguration(options);
+      
+      expect(result.ttl).toBe(300);
+      expect(result.limit).toBe(100);
+    });
+  });
+
+  describe('processRequest', () => {
+    it('should handle first request correctly', async () => {
+      const key = 'rate-limit:general:192.168.1.1';
+      const ttl = 60;
+
+      mockRedisService.get.mockResolvedValue(null);
+      mockRedisService.set.mockResolvedValue(undefined);
+
+      const result = await (service as any).processRequest(key, ttl);
+
+      expect(result).toBe(1);
+      expect(mockRedisService.set).toHaveBeenCalledWith(key, 1, ttl);
+      expect(mockRedisService.get).toHaveBeenCalledWith(key);
+    });
+
+    it('should handle existing request correctly', async () => {
+      const key = 'rate-limit:general:192.168.1.1';
+      const ttl = 60;
+
+      mockRedisService.get.mockResolvedValue(5);
+      mockRedisService.increment.mockResolvedValue(6);
+
+      const result = await (service as any).processRequest(key, ttl);
+
+      expect(result).toBe(6);
+      expect(mockRedisService.increment).toHaveBeenCalledWith(key, ttl);
+      expect(mockRedisService.get).toHaveBeenCalledWith(key);
+    });
+  });
+
+  describe('calculateRateLimitResult', () => {
+    it('should calculate result correctly for allowed request', async () => {
+      const currentCount = 5;
+      const config = { ttl: 60, limit: 100 };
+      const identifier = '192.168.1.1';
+
+      mockRedisService.getTtl.mockResolvedValue(45);
+
+      const result = await (service as any).calculateRateLimitResult(
+        currentCount,
+        config,
+        identifier
+      );
+
+      expect(result.isAllowed).toBe(true);
+      expect(result.currentCount).toBe(5);
+      expect(result.limit).toBe(100);
+      expect(result.ttl).toBe(60);
+      expect(result.remainingTime).toBe(45);
+      expect(result.resetTime).toBeInstanceOf(Date);
+    });
+
+    it('should calculate result correctly for blocked request', async () => {
+      const currentCount = 101;
+      const config = { ttl: 60, limit: 100 };
+      const identifier = '192.168.1.1';
+
+      mockRedisService.getTtl.mockResolvedValue(30);
+
+      const result = await (service as any).calculateRateLimitResult(
+        currentCount,
+        config,
+        identifier
+      );
+
+      expect(result.isAllowed).toBe(false);
+      expect(result.currentCount).toBe(101);
+      expect(result.limit).toBe(100);
+    });
+  });
+
+  describe('handleRateLimitError', () => {
+    it('should return fallback result when error occurs', () => {
+      const error = new Error('Redis connection failed');
+      const options = { type: 'general' as const, identifier: '192.168.1.1' };
+      const config = { ttl: 60, limit: 100 };
+
+      const result = (service as any).handleRateLimitError(error, options, config);
+
+      expect(result.isAllowed).toBe(true);
+      expect(result.currentCount).toBe(0);
+      expect(result.limit).toBe(100);
+      expect(result.ttl).toBe(60);
+      expect(result.remainingTime).toBe(0);
+      expect(result.resetTime).toBeInstanceOf(Date);
+    });
   });
 
   describe('getRateLimitStatus', () => {
-    it('should return current rate limit status without incrementing', async () => {
-      const options = { type: 'upload' as const, identifier: '192.168.1.1' };
+    it('should return status without incrementing count', async () => {
+      const options = { type: 'general' as const, identifier: '192.168.1.1' };
 
-      mockRedisService.get.mockResolvedValue(15);
-      mockRedisService.getTtl.mockResolvedValue(1800);
+      mockRedisService.get.mockResolvedValue(25);
+      mockRedisService.getTtl.mockResolvedValue(30);
 
       const result = await service.getRateLimitStatus(options);
 
-      expect(result.currentCount).toBe(15);
-      expect(result.limit).toBe(20);
       expect(result.isAllowed).toBe(true);
+      expect(result.currentCount).toBe(25);
+      expect(result.limit).toBe(100);
       expect(mockRedisService.increment).not.toHaveBeenCalled();
     });
   });
 
   describe('resetRateLimit', () => {
-    it('should delete rate limit key for given type and identifier', async () => {
-      const type = 'login';
+    it('should delete rate limit key', async () => {
+      const type = 'general';
       const identifier = '192.168.1.1';
 
       mockRedisService.delete.mockResolvedValue(undefined);
@@ -167,39 +282,42 @@ describe('RateLimiterService', () => {
       await service.resetRateLimit(type, identifier);
 
       expect(mockRedisService.delete).toHaveBeenCalledWith(
-        'rate-limit:login:192.168.1.1',
+        'rate-limit:general:192.168.1.1'
       );
     });
   });
 
-  describe('getConfigurations', () => {
-    it('should return current rate limit configurations', () => {
-      const config = service.getConfigurations();
+  describe('getConfigForType', () => {
+    it('should return correct config for each type', () => {
+      expect((service as any).getConfigForType('login')).toEqual({ ttl: 300, limit: 5 });
+      expect((service as any).getConfigForType('sensitive')).toEqual({ ttl: 60, limit: 30 });
+      expect((service as any).getConfigForType('upload')).toEqual({ ttl: 3600, limit: 20 });
+      expect((service as any).getConfigForType('general')).toEqual({ ttl: 60, limit: 100 });
+      expect((service as any).getConfigForType('unknown')).toEqual({ ttl: 60, limit: 100 });
+    });
+  });
 
-      expect(config.general.limit).toBe(100);
-      expect(config.sensitive.limit).toBe(30);
-      expect(config.login.limit).toBe(5);
-      expect(config.upload.limit).toBe(20);
+  describe('generateKey', () => {
+    it('should generate correct Redis key', () => {
+      const result = (service as any).generateKey('login', '192.168.1.1');
+      expect(result).toBe('rate-limit:login:192.168.1.1');
     });
   });
 
   describe('isHealthy', () => {
     it('should return true when Redis is healthy', async () => {
-      const mockRedisClient = {
-        ping: jest.fn().mockResolvedValue('PONG'),
-      };
-      mockRedisService.getClient.mockReturnValue(mockRedisClient as any);
+      const mockClient = { ping: jest.fn().mockResolvedValue('PONG') };
+      mockRedisService.getClient.mockReturnValue(mockClient);
 
       const result = await service.isHealthy();
 
       expect(result).toBe(true);
+      expect(mockClient.ping).toHaveBeenCalled();
     });
 
     it('should return false when Redis is unhealthy', async () => {
-      const mockRedisClient = {
-        ping: jest.fn().mockRejectedValue(new Error('Connection failed')),
-      };
-      mockRedisService.getClient.mockReturnValue(mockRedisClient as any);
+      const mockClient = { ping: jest.fn().mockRejectedValue(new Error('Connection failed')) };
+      mockRedisService.getClient.mockReturnValue(mockClient);
 
       const result = await service.isHealthy();
 

@@ -19,6 +19,11 @@ export interface RateLimitOptions {
   customLimit?: number;
 }
 
+interface RateLimitConfigResolved {
+  ttl: number;
+  limit: number;
+}
+
 @Injectable()
 export class RateLimiterService implements OnModuleInit {
   private readonly logger = new Logger(RateLimiterService.name);
@@ -109,60 +114,102 @@ export class RateLimiterService implements OnModuleInit {
    * Check if request is allowed based on rate limiting rules
    */
   async checkRateLimit(options: RateLimitOptions): Promise<RateLimitResult> {
-    const { type, identifier, customTtl, customLimit } = options;
-
-    // Get configuration for the specified type
-    const config = this.getConfigForType(type);
-    const ttl = customTtl || config.ttl;
-    const limit = customLimit || config.limit;
-
-    // Generate Redis key
-    const key = this.generateKey(type, identifier);
-
     try {
-      // Get current count
-      let currentCount = await this.redisService.get(key);
-
-      if (currentCount === null) {
-        // First request, set initial count
-        currentCount = 1;
-        await this.redisService.set(key, currentCount, ttl);
-      } else {
-        // Increment existing count
-        currentCount = await this.redisService.increment(key, ttl);
-      }
-
-      // Check if limit exceeded
-      const isAllowed = currentCount <= limit;
-
-      // Get remaining time
-      const remainingTime = await this.redisService.getTtl(key);
-      const resetTime = new Date(Date.now() + remainingTime * 1000);
-
-      // Log rate limit check
-      this.logRateLimitCheck(options, currentCount, limit, isAllowed);
-
-      return {
-        isAllowed,
+      // Resolve configuration
+      const resolvedConfig = this.resolveConfiguration(options);
+      
+      // Generate Redis key
+      const key = this.generateKey(options.type, options.identifier);
+      
+      // Process the request and get current count
+      const currentCount = await this.processRequest(key, resolvedConfig.ttl);
+      
+      // Calculate rate limit result
+      const result = await this.calculateRateLimitResult(
         currentCount,
-        limit,
-        ttl,
-        remainingTime,
-        resetTime,
-      };
+        resolvedConfig,
+        options.identifier
+      );
+      
+      // Log the rate limit check
+      this.logRateLimitCheck(options, currentCount, resolvedConfig.limit, result.isAllowed);
+      
+      return result;
     } catch (error) {
-      this.logger.error(`Rate limit check failed for ${identifier}`, error);
-
-      // In case of Redis error, allow the request but log it
-      return {
-        isAllowed: true,
-        currentCount: 0,
-        limit,
-        ttl,
-        remainingTime: 0,
-        resetTime: new Date(),
-      };
+      // Resolve config again in case of error to ensure it's available
+      const fallbackConfig = this.resolveConfiguration(options);
+      return this.handleRateLimitError(error, options, fallbackConfig);
     }
+  }
+
+  /**
+   * Resolve configuration for rate limiting based on options
+   */
+  private resolveConfiguration(options: RateLimitOptions): RateLimitConfigResolved {
+    const config = this.getConfigForType(options.type);
+    return {
+      ttl: options.customTtl || config.ttl,
+      limit: options.customLimit || config.limit,
+    };
+  }
+
+  /**
+   * Process the request and return current count
+   */
+  private async processRequest(key: string, ttl: number): Promise<number> {
+    const currentCount = await this.redisService.get(key);
+    
+    if (currentCount === null) {
+      // First request, set initial count
+      await this.redisService.set(key, 1, ttl);
+      return 1;
+    } else {
+      // Increment existing count
+      return await this.redisService.increment(key, ttl);
+    }
+  }
+
+  /**
+   * Calculate rate limit result based on current count and configuration
+   */
+  private async calculateRateLimitResult(
+    currentCount: number,
+    config: RateLimitConfigResolved,
+    identifier: string
+  ): Promise<RateLimitResult> {
+    const key = this.generateKey('temp', identifier); // Temporary key for TTL check
+    const remainingTime = await this.redisService.getTtl(key);
+    const resetTime = new Date(Date.now() + remainingTime * 1000);
+
+    return {
+      isAllowed: currentCount <= config.limit,
+      currentCount,
+      limit: config.limit,
+      ttl: config.ttl,
+      remainingTime,
+      resetTime,
+    };
+  }
+
+  /**
+   * Handle errors during rate limit check with graceful fallback
+   */
+  private handleRateLimitError(
+    error: unknown,
+    options: RateLimitOptions,
+    config: RateLimitConfigResolved
+  ): RateLimitResult {
+    this.logger.error(`Rate limit check failed for ${options.identifier}`, error);
+
+    // In case of Redis error, allow the request but log it
+    return {
+      isAllowed: true,
+      currentCount: 0,
+      limit: config.limit,
+      ttl: config.ttl,
+      remainingTime: 0,
+      resetTime: new Date(),
+    };
   }
 
   /**
