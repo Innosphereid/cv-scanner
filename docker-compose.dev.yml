@@ -9,39 +9,24 @@ services:
     container_name: cv-scanner-app-dev
     restart: unless-stopped
     ports:
-      - '${PORT:-3000}:3000'
+      - '3000:3000'
     environment:
-      - NODE_ENV=${NODE_ENV:-development}
+      - NODE_ENV=development
       - PORT=3000
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_NAME=${DB_NAME:-cv_scanner_dev_db}
-      - DB_USER=${DB_USER:-postgres}
+      - DB_NAME=cv_scanner_dev_db
+      - DB_USER=postgres
       - DB_PASSWORD_FILE=/run/secrets/db_password
-      - DB_SCHEMA=${DB_SCHEMA:-public}
-      - DB_SSL=${DB_SSL:-false}
-      - DB_REJECT_UNAUTHORIZED=${DB_REJECT_UNAUTHORIZED:-true}
-      - DB_MAX_CONNECTIONS=${DB_MAX_CONNECTIONS:-10}
-      - DB_IDLE_TIMEOUT=${DB_IDLE_TIMEOUT:-10000}
-      - DB_CONN_TIMEOUT=${DB_CONN_TIMEOUT:-10000}
-      - DB_LOGGING=${DB_LOGGING:-true}
+      - DB_SCHEMA=public
+      - DB_SSL=false
+      - DB_LOGGING=true
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_DB=0
       - REDIS_PASSWORD_FILE=/run/secrets/redis_password
-      - REDIS_KEY_PREFIX=cv-scanner-dev:
-      - REDIS_RETRY_DELAY_ON_FAILOVER=100
-      - REDIS_MAX_RETRIES_PER_REQUEST=3
-      - LOG_LEVEL=${LOG_LEVEL:-debug}
-      - LOG_FILE_ENABLED=${LOG_FILE_ENABLED:-true}
-      - LOG_CONSOLE_ENABLED=${LOG_CONSOLE_ENABLED:-true}
-      - CLOUDINARY_CLOUD_NAME_FILE=/run/secrets/cloudinary_cloud_name
-      - CLOUDINARY_API_KEY_FILE=/run/secrets/cloudinary_api_key
-      - CLOUDINARY_API_SECRET_FILE=/run/secrets/cloudinary_api_secret
-      - CLOUDINARY_SECURE=${CLOUDINARY_SECURE:-true}
-      - CLOUDINARY_RETRY_ATTEMPTS=${CLOUDINARY_RETRY_ATTEMPTS:-2}
-      - CLOUDINARY_RETRY_DELAY_MS=${CLOUDINARY_RETRY_DELAY_MS:-500}
-      - CLOUDINARY_FAIL_FAST=${CLOUDINARY_FAIL_FAST:-true}
+      - REDIS_KEY_PREFIX=cv-scanner-dev
+      - LOG_LEVEL=debug
     secrets:
       - db_password
       - cloudinary_cloud_name
@@ -62,12 +47,6 @@ services:
         condition: service_healthy
     networks:
       - cv-scanner-dev-network
-    healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:3000/health']
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
 
   # Development PostgreSQL Database
   postgres:
@@ -75,25 +54,20 @@ services:
     container_name: cv_scanner_postgres_dev
     restart: unless-stopped
     environment:
-      - POSTGRES_DB=${DB_NAME:-cv_scanner_dev_db}
-      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_DB=cv_scanner_dev_db
+      - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD_FILE=/run/secrets/db_password
-      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
     secrets:
       - db_password
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
       - ./docker/postgres/init:/docker-entrypoint-initdb.d
     ports:
-      - '${DB_PORT:-5433}:5432'
+      - '5433:5432'
     networks:
       - cv-scanner-dev-network
     healthcheck:
-      test:
-        [
-          'CMD-SHELL',
-          'pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-cv_scanner_dev_db}',
-        ]
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d cv_scanner_dev_db']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -105,16 +79,16 @@ services:
     container_name: cv_scanner_redis_dev
     restart: unless-stopped
     ports:
-      - '${REDIS_PORT:-6379}:6379'
+      - '6379:6379'
     environment:
       - REDIS_PASSWORD_FILE=/run/secrets/redis_password
     secrets:
       - redis_password
     volumes:
       - redis_data_dev:/data
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:-redis123dev}
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass redis123dev
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis123dev}", "ping"]
+      test: ['CMD', 'redis-cli', '-a', 'redis123dev', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
