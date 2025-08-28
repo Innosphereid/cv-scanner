@@ -83,14 +83,24 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     try {
-      // Test connection
+      // Ensure connection is initiated even when lazyConnect=true
+      await this.redis.connect();
+      // Wait for ready to avoid early ping errors when offline queue is disabled
+      await new Promise<void>(resolve => {
+        if ((this.redis as any).status === 'ready') {
+          resolve();
+          return;
+        }
+        this.redis.once('ready', () => resolve());
+      });
+      // Test command after ready
       await this.redis.ping();
       this.logger.log('Redis connection test successful');
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
+      // Do not block application startup on transient Redis errors in dev
       this.logger.error('Redis connection test failed', errorMessage);
-      throw error;
     }
   }
 

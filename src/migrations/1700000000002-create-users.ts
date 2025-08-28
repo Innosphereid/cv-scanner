@@ -20,6 +20,20 @@ export class CreateUsers1700000000002 implements MigrationInterface {
       );
     `);
 
+    // Defensive alignment in case a prior init script created a different `users` table shape
+    await queryRunner.query(`
+      ALTER TABLE public.users
+        ADD COLUMN IF NOT EXISTS password_hash varchar(255),
+        ADD COLUMN IF NOT EXISTS role varchar(50) DEFAULT 'user' NOT NULL,
+        ADD COLUMN IF NOT EXISTS verified boolean DEFAULT false NOT NULL,
+        ADD COLUMN IF NOT EXISTS lockout_attempts int DEFAULT 0 NOT NULL,
+        ADD COLUMN IF NOT EXISTS locked_until timestamptz NULL,
+        ADD COLUMN IF NOT EXISTS token_version int DEFAULT 1 NOT NULL,
+        ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now() NOT NULL,
+        ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now() NOT NULL,
+        ADD COLUMN IF NOT EXISTS deleted_at timestamptz NULL;
+    `);
+
     await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_users_email ON public.users (email);
     `);

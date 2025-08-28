@@ -4,6 +4,13 @@ import * as Sentry from '@sentry/nestjs';
 Sentry.init({
   dsn: 'https://9085f397a414fa6433f4bc54b806955a@o4509006878408704.ingest.us.sentry.io/4509913092063232',
 
+  integrations: [
+    // send console.log, console.warn, and console.error calls as logs to Sentry
+    Sentry.consoleLoggingIntegration({ levels: ['log', 'warn', 'error'] }),
+  ],
+  // Enable logs to be sent to Sentry
+  enableLogs: true,
+
   // Environment detection
   environment: process.env.NODE_ENV || 'development',
 

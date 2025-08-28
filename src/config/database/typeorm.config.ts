@@ -14,10 +14,10 @@ export function buildTypeOrmOptions(db: DatabaseConfig): TypeOrmModuleOptions {
     : {};
 
   const isTsNode = !!process.env.TS_NODE;
-  const isDev = process.env.NODE_ENV !== 'production';
+  const useTsMigrations = process.env.TYPEORM_MIGRATIONS_TS === '1';
 
   const migrationsPaths =
-    isTsNode || isDev
+    useTsMigrations || isTsNode
       ? [join(process.cwd(), 'src/migrations/*{.ts,.js}')]
       : [join(__dirname, '../../migrations/*{.js}')];
 

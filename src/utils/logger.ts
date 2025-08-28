@@ -12,6 +12,7 @@ type RotateFileOptions = {
   zippedArchive?: boolean;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 const DailyRotateFileCtor: new (
   options?: RotateFileOptions,
 ) => TransportStream =
