@@ -11,9 +11,7 @@ export class ResendVerificationQueryDto {
 export class ResendVerificationBodyDto {
   @IsEmail({}, { message: 'Please provide a valid email address' })
   email: string;
-}
 
-export class ResendVerificationRequestDto {
   @IsOptional()
   @IsString()
   ip?: string;
