@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UserEntity } from '../../entities/user.entity';
 import { LoginService } from './login.service';
 import { LoginController } from './login.controller';
+import { AccessTokenGuard } from './guards/access-token.guard';
 
 @Module({
   imports: [
@@ -19,7 +20,7 @@ import { LoginController } from './login.controller';
     }),
   ],
   controllers: [LoginController],
-  providers: [LoginService],
-  exports: [LoginService],
+  providers: [LoginService, AccessTokenGuard],
+  exports: [LoginService, AccessTokenGuard],
 })
 export class LoginModule {}

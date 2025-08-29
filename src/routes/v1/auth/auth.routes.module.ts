@@ -5,6 +5,7 @@ import { VerifyEmailModule } from '../../../auth/verify-email/verify-email.modul
 import { LoginModule } from '../../../auth/login/login.module';
 import { ForgotPasswordModule } from '../../../auth/forgot-password/forgot-password.module';
 import { ResetPasswordModule } from '../../../auth/reset-password/reset-password.module';
+import { ResendVerificationModule } from '../../../auth/resend-verification/resend-verification.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { ResetPasswordModule } from '../../../auth/reset-password/reset-password
     LoginModule,
     ForgotPasswordModule,
     ResetPasswordModule,
+    ResendVerificationModule,
     RouterModule.register([
       {
         path: 'api/v1',
@@ -36,6 +38,10 @@ import { ResetPasswordModule } from '../../../auth/reset-password/reset-password
           {
             path: 'auth',
             module: ResetPasswordModule,
+          },
+          {
+            path: 'auth',
+            module: ResendVerificationModule,
           },
         ],
       },
