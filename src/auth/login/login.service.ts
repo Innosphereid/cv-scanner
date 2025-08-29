@@ -51,7 +51,7 @@ export class LoginService {
     });
 
     if (!user) {
-      this.logger.warn('Login failed: User not found', {
+      this.logger.warn('Login failed: User not found', 'LoginService', {
         email: normalizedEmail,
         ip,
       });
@@ -60,7 +60,7 @@ export class LoginService {
 
     // Check if user is verified
     if (!user.verified) {
-      this.logger.warn('Login failed: User not verified', {
+      this.logger.warn('Login failed: User not verified', 'LoginService', {
         userId: user.id,
         email: normalizedEmail,
         ip,
@@ -73,7 +73,7 @@ export class LoginService {
     // Check lockout status
     const lockoutInfo = this.getUserLockoutInfo(user);
     if (lockoutInfo.isLocked) {
-      this.logger.warn('Login failed: Account locked', {
+      this.logger.warn('Login failed: Account locked', 'LoginService', {
         userId: user.id,
         email: normalizedEmail,
         ip,
@@ -92,7 +92,7 @@ export class LoginService {
 
     if (!isPasswordValid) {
       await this.handleFailedLogin(user);
-      this.logger.warn('Login failed: Invalid password', {
+      this.logger.warn('Login failed: Invalid password', 'LoginService', {
         userId: user.id,
         email: normalizedEmail,
         ip,
@@ -129,9 +129,14 @@ export class LoginService {
     try {
       return await bcrypt.compare(plainPassword, hashedPassword);
     } catch (error) {
-      this.logger.error('Password verification error', undefined, undefined, {
-        error,
-      });
+      this.logger.error(
+        'Password verification error',
+        undefined,
+        'LoginService',
+        {
+          error,
+        },
+      );
       return false;
     }
   }
@@ -150,12 +155,16 @@ export class LoginService {
         lockedUntil,
       });
 
-      this.logger.warn('Account locked due to multiple failed attempts', {
-        userId: user.id,
-        email: user.email,
-        lockoutAttempts: newAttempts,
-        lockedUntil,
-      });
+      this.logger.warn(
+        'Account locked due to multiple failed attempts',
+        'LoginService',
+        {
+          userId: user.id,
+          email: user.email,
+          lockoutAttempts: newAttempts,
+          lockedUntil,
+        },
+      );
     } else {
       await this.usersRepo.update(user.id, {
         lockoutAttempts: newAttempts,
