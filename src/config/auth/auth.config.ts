@@ -6,6 +6,7 @@ export interface AuthConfig {
   jwtTtl: string;
   cookieDomain?: string;
   appBaseUrl: string;
+  otpHmacSecret: string;
 }
 
 export const authConfig = registerAs(
@@ -16,5 +17,6 @@ export const authConfig = registerAs(
     jwtTtl: process.env.AUTH_JWT_TTL || '15m',
     cookieDomain: process.env.AUTH_COOKIE_DOMAIN,
     appBaseUrl: process.env.APP_BASE_URL || 'http://localhost:3000',
+    otpHmacSecret: process.env.AUTH_OTP_HMAC_SECRET || 'changeme-otp',
   }),
 );

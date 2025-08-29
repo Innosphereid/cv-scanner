@@ -34,6 +34,7 @@ services:
       - MAIL_FROM_NAME=${MAIL_FROM_NAME}
       - LOG_LEVEL=debug
       - TYPEORM_MIGRATIONS_TS=0
+      - AUTH_OTP_HMAC_SECRET=${AUTH_OTP_HMAC_SECRET}
     secrets:
       - db_password
       - cloudinary_cloud_name

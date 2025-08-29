@@ -3,6 +3,8 @@ import { RouterModule } from '@nestjs/core';
 import { RegisterModule } from '../../../auth/register/register.module';
 import { VerifyEmailModule } from '../../../auth/verify-email/verify-email.module';
 import { LoginModule } from '../../../auth/login/login.module';
+import { ForgotPasswordModule } from '../../../auth/forgot-password/forgot-password.module';
+import { ResetPasswordModule } from '../../../auth/reset-password/reset-password.module';
 
 @Module({
   imports: [
@@ -24,6 +26,14 @@ import { LoginModule } from '../../../auth/login/login.module';
           {
             path: 'auth',
             module: LoginModule,
+          },
+          {
+            path: 'auth',
+            module: ForgotPasswordModule,
+          },
+          {
+            path: 'auth',
+            module: ResetPasswordModule,
           },
         ],
       },
