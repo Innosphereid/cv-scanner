@@ -138,6 +138,28 @@ export class ResendVerificationService {
       throw new BadRequestException('Email not registered');
     }
 
+    // Check if user has ever requested password reset before
+    const existingOtp = await this.otpRepo.findOne({
+      where: { user: { id: user.id } },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (!existingOtp) {
+      this.logger.warn(
+        'Resend forgot password requested for user who never requested password reset',
+        'ResendVerificationService',
+        {
+          userId: user.id,
+          email: normalizedEmail,
+          ip: input.ip,
+          userAgent: input.userAgent?.substring(0, 100),
+        },
+      );
+      throw new BadRequestException(
+        'No password reset request found. Please use forgot password first.',
+      );
+    }
+
     // Invalidate previous OTPs
     const currentTime = new Date();
     await this.otpRepo.update(
