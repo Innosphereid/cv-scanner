@@ -1,30 +1,102 @@
 sequenceDiagram
     autonumber
     participant C as "Client"
-    participant A as "API (Auth Controller/Service)"
-    participant D as "DB (Users, VerifTokens)"
+    participant A as "API (ResendVerification Controller)"
+    participant S as "ResendVerification Service"
+    participant D as "DB (Users, VerifTokens, OTPs)"
+    participant R as "Rate Limiter (Redis)"
     participant Q as "Queue (Jobs)"
     participant M as "Mailer (Mailtrap)"
 
-    C->>A: POST /api/v1/auth/resend-verification
-    A->>D: Get user by auth context/cookie
-    alt Not authenticated
-      A-->>C: 401 Unauthorized
-    else Authenticated
-      alt Already verified
-        A-->>C: 409 Conflict (Email already verified)
-      else Not verified
-        A->>D: Check resend rate limit (3/day per user)
-        alt Exceeded
-          A-->>C: 429 Too Many Requests (Try later)
-        else OK
-          A->>A: Invalidate previous verification tokens
-          A->>A: Generate new token (5 min, single-use)
-          A->>Q: Enqueue SendVerificationEmail(user, token)
-          Q->>M: Send email
-          A-->>C: 200 OK (Verification email sent)
+    Note over C,M: Resend Verification Flow
+
+    C->>A: POST /api/v1/auth/resend-verification?type={type}
+    Note right of C: type = 'register' or 'forgot-password'
+
+    A->>A: Validate query parameters and body
+    A->>A: Extract IP and User-Agent with fallbacks
+
+    alt type = 'register'
+        Note over A: No authentication required
+        A->>S: resendRegisterVerification(input)
+        
+        S->>R: Check rate limit (3/day per email)
+        alt Rate limit exceeded
+            R-->>S: Rate limit exceeded
+            S-->>A: 429 Too Many Requests
+            A-->>C: 429 Too Many Requests
+        else Rate limit OK
+            R-->>S: Rate limit OK
+            S->>D: Find user by email
+            
+            alt User not found
+                D-->>S: User not found
+                S-->>A: 400 Bad Request (Email not registered)
+                A-->>C: 400 Bad Request
+            else User found
+                D-->>S: User data
+                S->>S: Check if user already verified
+                
+                alt User already verified
+                    S-->>A: 409 Conflict (Email already verified)
+                    A-->>C: 409 Conflict
+                else User not verified
+                    S->>D: Invalidate previous verification tokens
+                    S->>S: Generate new verification token (5 min TTL)
+                    S->>D: Save new verification token
+                    S->>Q: Enqueue SendVerificationEmail(user, token)
+                    Q->>M: Send verification email
+                    S-->>A: Success response
+                    A-->>C: 200 OK (Verification email sent)
+                end
+            end
         end
-      end
+
+    else type = 'forgot-password'
+        Note over A: Authentication required (JWT cookie)
+        A->>A: Validate JWT token via AccessTokenGuard
+        
+        alt Not authenticated
+            A-->>C: 401 Unauthorized
+        else Authenticated
+            A->>S: resendForgotPasswordVerification(input)
+            
+            S->>R: Check rate limit (3/day per user)
+            alt Rate limit exceeded
+                R-->>S: Rate limit exceeded
+                S-->>A: 429 Too Many Requests
+                A-->>C: 429 Too Many Requests
+            else Rate limit OK
+                R-->>S: Rate limit OK
+                S->>D: Find user by email
+                
+                alt User not found
+                    D-->>S: User not found
+                    S-->>A: 400 Bad Request (Email not registered)
+                    A-->>C: 400 Bad Request
+                else User found
+                    D-->>S: User data
+                    S->>D: Check if user ever requested password reset
+                    
+                    alt No previous password reset request
+                        D-->>S: No OTP records found
+                        S-->>A: 400 Bad Request (No password reset request found)
+                        A-->>C: 400 Bad Request
+                    else Has previous password reset request
+                        D-->>S: OTP records found
+                        S->>D: Invalidate previous OTPs
+                        S->>S: Generate new OTP (5 min TTL)
+                        S->>D: Save new OTP
+                        S->>Q: Enqueue SendResetOtpEmail(user, otp)
+                        Q->>M: Send OTP email
+                        S-->>A: Success response
+                        A-->>C: 200 OK (Password reset OTP sent)
+                    end
+                end
+            end
+        end
     end
+
+    Note over C,M: End of Resend Verification Flow
 
 
