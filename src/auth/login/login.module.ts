@@ -13,9 +13,7 @@ import { LoginController } from './login.controller';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('auth.jwtSecret'),
-        signOptions: {
-          expiresIn: configService.get<string>('auth.jwtTtl') || '15m',
-        },
+        // Remove expiresIn since we handle expiration manually in payload
       }),
       inject: [ConfigService],
     }),
