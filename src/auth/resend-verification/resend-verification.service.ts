@@ -49,52 +49,13 @@ export class ResendVerificationService {
       identifier: `resend_register:${normalizedEmail}`,
     });
 
-    const user = await this.usersRepo.findOne({
-      where: { email: normalizedEmail },
-    });
-
-    if (!user) {
-      this.logger.warn(
-        'Resend verification requested for non-existing email',
-        'ResendVerificationService',
-        {
-          email: normalizedEmail,
-          ip: input.ip,
-          userAgent: input.userAgent?.substring(0, 100),
-        },
-      );
-      throw new BadRequestException('Email not registered');
-    }
-
-    if (user.verified) {
-      throw new ConflictException('Email already verified');
-    }
-
-    // Invalidate previous verification tokens
-    const currentTime = new Date();
-    await this.emailTokensRepo.update(
-      { user: { id: user.id }, usedAt: undefined },
-      { usedAt: currentTime },
+    const user = await this.findAndValidateUserForRegister(
+      normalizedEmail,
+      input,
     );
-
-    // Generate new verification token
-    const { token, tokenHash, expiresAt } =
-      this.generateEmailVerificationToken();
-    const evToken = this.emailTokensRepo.create({
-      user,
-      tokenHash,
-      expiresAt,
-      usedAt: null,
-    });
-    await this.emailTokensRepo.save(evToken);
-
-    // Enqueue verification email
-    const appBase = this.config.get<string>('auth.appBaseUrl')!;
-    const verifyUrl = `${appBase}/verify-email?token=${encodeURIComponent(token)}`;
-    await this.mailService.enqueueVerificationEmail({
-      toEmail: user.email,
-      verifyUrl,
-    });
+    await this.invalidatePreviousVerificationTokens(user.id);
+    const verificationToken = await this.createNewVerificationToken(user);
+    await this.sendVerificationEmail(user, verificationToken.token);
 
     this.logger.info('Register verification email resent', {
       userId: user.id,
@@ -121,69 +82,14 @@ export class ResendVerificationService {
       identifier: `resend_forgot_password:${normalizedEmail}`,
     });
 
-    const user = await this.usersRepo.findOne({
-      where: { email: normalizedEmail },
-    });
-
-    if (!user) {
-      this.logger.warn(
-        'Resend forgot password requested for non-existing email',
-        'ResendVerificationService',
-        {
-          email: normalizedEmail,
-          ip: input.ip,
-          userAgent: input.userAgent?.substring(0, 100),
-        },
-      );
-      throw new BadRequestException('Email not registered');
-    }
-
-    // Check if user has ever requested password reset before
-    const existingOtp = await this.otpRepo.findOne({
-      where: { user: { id: user.id } },
-      order: { createdAt: 'DESC' },
-    });
-
-    if (!existingOtp) {
-      this.logger.warn(
-        'Resend forgot password requested for user who never requested password reset',
-        'ResendVerificationService',
-        {
-          userId: user.id,
-          email: normalizedEmail,
-          ip: input.ip,
-          userAgent: input.userAgent?.substring(0, 100),
-        },
-      );
-      throw new BadRequestException(
-        'No password reset request found. Please use forgot password first.',
-      );
-    }
-
-    // Invalidate previous OTPs
-    const currentTime = new Date();
-    await this.otpRepo.update(
-      { user: { id: user.id }, usedAt: undefined },
-      { usedAt: currentTime },
+    const user = await this.findAndValidateUserForForgotPassword(
+      normalizedEmail,
+      input,
     );
-
-    // Generate new OTP
-    const { otp, otpHash, salt, expiresAt } = this.generatePasswordResetOtp();
-    const otpRecord = this.otpRepo.create({
-      user,
-      otpHash,
-      salt,
-      expiresAt,
-      usedAt: null,
-    });
-    await this.otpRepo.save(otpRecord);
-
-    // Enqueue reset OTP email
-    await this.mailService.enqueueResetOtpEmail({
-      toEmail: user.email,
-      otp,
-      appName: this.config.get<string>('mailer.fromName') || 'CV Scanner',
-    });
+    await this.validatePasswordResetHistory(user.id, normalizedEmail, input);
+    await this.invalidatePreviousOtps(user.id);
+    const otpData = await this.createNewOtp(user);
+    await this.sendOtpEmail(user, otpData.otp);
 
     this.logger.info('Forgot password OTP email resent', {
       userId: user.id,
@@ -236,5 +142,152 @@ export class ResendVerificationService {
     const expiresAt = new Date(expirationTime);
 
     return { otp, otpHash, salt, expiresAt };
+  }
+
+  // Helper methods for register verification
+  private async findAndValidateUserForRegister(
+    email: string,
+    input: ResendVerificationRequest,
+  ) {
+    const user = await this.usersRepo.findOne({
+      where: { email },
+    });
+
+    if (!user) {
+      this.logger.warn(
+        'Resend verification requested for non-existing email',
+        'ResendVerificationService',
+        {
+          email,
+          ip: input.ip,
+          userAgent: input.userAgent?.substring(0, 100),
+        },
+      );
+      throw new BadRequestException('Email not registered');
+    }
+
+    if (user.verified) {
+      throw new ConflictException('Email already verified');
+    }
+
+    return user;
+  }
+
+  private async invalidatePreviousVerificationTokens(
+    userId: string,
+  ): Promise<void> {
+    const currentTime = new Date();
+    await this.emailTokensRepo.update(
+      { user: { id: userId }, usedAt: undefined },
+      { usedAt: currentTime },
+    );
+  }
+
+  private async createNewVerificationToken(
+    user: UserEntity,
+  ): Promise<TokenGenerationResult> {
+    const { token, tokenHash, expiresAt } =
+      this.generateEmailVerificationToken();
+    const evToken = this.emailTokensRepo.create({
+      user,
+      tokenHash,
+      expiresAt,
+      usedAt: null,
+    });
+    await this.emailTokensRepo.save(evToken);
+    return { token, tokenHash, expiresAt };
+  }
+
+  private async sendVerificationEmail(
+    user: UserEntity,
+    token: string,
+  ): Promise<void> {
+    const appBase = this.config.get<string>('auth.appBaseUrl')!;
+    const verifyUrl = `${appBase}/verify-email?token=${encodeURIComponent(token)}`;
+    await this.mailService.enqueueVerificationEmail({
+      toEmail: user.email,
+      verifyUrl,
+    });
+  }
+
+  // Helper methods for forgot password verification
+  private async findAndValidateUserForForgotPassword(
+    email: string,
+    input: ResendVerificationRequest,
+  ) {
+    const user = await this.usersRepo.findOne({
+      where: { email },
+    });
+
+    if (!user) {
+      this.logger.warn(
+        'Resend forgot password requested for non-existing email',
+        'ResendVerificationService',
+        {
+          email,
+          ip: input.ip,
+          userAgent: input.userAgent?.substring(0, 100),
+        },
+      );
+      throw new BadRequestException('Email not registered');
+    }
+
+    return user;
+  }
+
+  private async validatePasswordResetHistory(
+    userId: string,
+    email: string,
+    input: ResendVerificationRequest,
+  ): Promise<void> {
+    const existingOtp = await this.otpRepo.findOne({
+      where: { user: { id: userId } },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (!existingOtp) {
+      this.logger.warn(
+        'Resend forgot password requested for user who never requested password reset',
+        'ResendVerificationService',
+        {
+          userId,
+          email,
+          ip: input.ip,
+          userAgent: input.userAgent?.substring(0, 100),
+        },
+      );
+      throw new BadRequestException(
+        'No password reset request found. Please use forgot password first.',
+      );
+    }
+  }
+
+  private async invalidatePreviousOtps(userId: string): Promise<void> {
+    const currentTime = new Date();
+    await this.otpRepo.update(
+      { user: { id: userId }, usedAt: undefined },
+      { usedAt: currentTime },
+    );
+  }
+
+  private async createNewOtp(user: UserEntity): Promise<OtpGenerationResult> {
+    const { otp, otpHash, salt, expiresAt } = this.generatePasswordResetOtp();
+    const otpRecord = this.otpRepo.create({
+      user,
+      otpHash,
+      salt,
+      expiresAt,
+      usedAt: null,
+    });
+    await this.otpRepo.save(otpRecord);
+    return { otp, otpHash, salt, expiresAt };
+  }
+
+  private async sendOtpEmail(user: UserEntity, otp: string): Promise<void> {
+    await this.mailService.enqueueResetOtpEmail({
+      toEmail: user.email,
+      otp,
+      appName: this.config.get<string>('mailer.fromName') || 'CV Scanner',
+    });
   }
 }
