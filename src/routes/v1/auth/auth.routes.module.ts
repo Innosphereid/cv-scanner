@@ -11,6 +11,8 @@ import { ResetPasswordModule } from '../../../auth/reset-password/reset-password
     RegisterModule,
     VerifyEmailModule,
     LoginModule,
+    ForgotPasswordModule,
+    ResetPasswordModule,
     RouterModule.register([
       {
         path: 'api/v1',
