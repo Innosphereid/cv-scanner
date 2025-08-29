@@ -14,6 +14,45 @@ export const TEST_CONSTANTS = {
   EXECUTION_TIME: 150,
 } as const;
 
+// Interface untuk mock request
+interface MockRequest {
+  body: {
+    email: string;
+    password: string;
+  };
+  requestMetadata: {
+    request_id: string;
+    execution_time: number;
+  };
+  get: jest.MockedFunction<(header: string) => string>;
+  socket: { remoteAddress: string };
+  [key: string]: unknown; // Untuk properti tambahan
+}
+
+// Interface untuk mock response
+interface MockResponse {
+  cookie: jest.MockedFunction<(...args: unknown[]) => void>;
+  status: jest.MockedFunction<(code: number) => MockResponse>;
+  json: jest.MockedFunction<(data: unknown) => void>;
+}
+
+// Interface untuk mock builders
+interface MockSuccessBuilder {
+  message: jest.MockedFunction<(msg: string) => MockSuccessBuilder>;
+  data: jest.MockedFunction<(data: unknown) => MockSuccessBuilder>;
+  metadata: jest.MockedFunction<(metadata: unknown) => MockSuccessBuilder>;
+  status: jest.MockedFunction<(status: number) => MockSuccessBuilder>;
+  build: jest.MockedFunction<() => { success: true }>;
+}
+
+interface MockErrorBuilder {
+  message: jest.MockedFunction<(msg: string) => MockErrorBuilder>;
+  errors: jest.MockedFunction<(errors: unknown) => MockErrorBuilder>;
+  metadata: jest.MockedFunction<(metadata: unknown) => MockErrorBuilder>;
+  status: jest.MockedFunction<(status: number) => MockErrorBuilder>;
+  build: jest.MockedFunction<() => { success: false }>;
+}
+
 // Mock user entity factory
 export const createMockUser = (
   overrides: Partial<UserEntity> = {},
@@ -52,8 +91,10 @@ export const createMockLoginResponse = (
   ...overrides,
 });
 
-// Mock request factory
-export const createMockRequest = (overrides: any = {}) => ({
+// Mock request factory - sekarang dengan typing yang proper
+export const createMockRequest = (
+  overrides: Partial<MockRequest> = {},
+): MockRequest => ({
   body: {
     email: TEST_CONSTANTS.EMAIL,
     password: TEST_CONSTANTS.PASSWORD,
@@ -68,14 +109,14 @@ export const createMockRequest = (overrides: any = {}) => ({
 });
 
 // Mock response factory
-export const createMockResponse = () => ({
+export const createMockResponse = (): MockResponse => ({
   cookie: jest.fn(),
   status: jest.fn().mockReturnThis(),
   json: jest.fn(),
 });
 
 // Mock builders
-export const createMockSuccessBuilder = () => ({
+export const createMockSuccessBuilder = (): MockSuccessBuilder => ({
   message: jest.fn().mockReturnThis(),
   data: jest.fn().mockReturnThis(),
   metadata: jest.fn().mockReturnThis(),
@@ -83,7 +124,7 @@ export const createMockSuccessBuilder = () => ({
   build: jest.fn().mockReturnValue({ success: true }),
 });
 
-export const createMockErrorBuilder = () => ({
+export const createMockErrorBuilder = (): MockErrorBuilder => ({
   message: jest.fn().mockReturnThis(),
   errors: jest.fn().mockReturnThis(),
   metadata: jest.fn().mockReturnThis(),
@@ -113,16 +154,18 @@ export const TEST_SCENARIOS = {
 } as const;
 
 // Helper functions
-export const mockDate = (dateString: string) => {
+export const mockDate = (dateString: string): jest.SpyInstance => {
   const mockDate = new Date(dateString);
   return jest.spyOn(global, 'Date').mockImplementation(() => mockDate);
 };
 
-export const restoreDate = () => {
+export const restoreDate = (): void => {
   jest.restoreAllMocks();
 };
 
-export const setEnvironment = (env: 'development' | 'production') => {
+export const setEnvironment = (
+  env: 'development' | 'production',
+): (() => void) => {
   const originalEnv = process.env.NODE_ENV;
   process.env.NODE_ENV = env;
   return () => {
