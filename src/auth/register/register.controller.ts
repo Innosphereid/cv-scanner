@@ -19,7 +19,13 @@ import { ErrorBuilder } from '../../utils/responses/fail';
 import { Request } from 'express';
 import { RequestContextInterceptor } from '../../utils/responses/request-context.interceptor';
 import { RequestMetadata } from '../../utils/responses/types';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import {
+  SuccessResponseDto,
+  ErrorResponseDto,
+} from '../../swagger/dto/base-response.dto';
 
+@ApiTags('Authentication', 'Register')
 @Controller()
 @UseInterceptors(RateLimitInterceptor, RequestContextInterceptor)
 export class RegisterController {
@@ -28,6 +34,27 @@ export class RegisterController {
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @RateLimitCustom(3600, 5, 'Register limit 5/hour per IP')
+  @ApiOperation({
+    summary: 'Register new user',
+    description:
+      'Create a new user account with email and password. The user will receive an email verification link.',
+  })
+  @ApiBody({ type: RegisterDto })
+  @ApiResponse({
+    status: 201,
+    description: 'User registered successfully',
+    type: SuccessResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - validation error',
+    type: ErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many requests - rate limit exceeded',
+    type: ErrorResponseDto,
+  })
   async register(
     @Body() body: RegisterDto,
     @Req() req: Request & { requestMetadata?: RequestMetadata },

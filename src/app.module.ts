@@ -10,6 +10,7 @@ import { APP_FILTER } from '@nestjs/core';
 import { RateLimiterModule } from './middlewares/rate-limiter';
 import { MailModule } from './mail/mail.module';
 import { AuthRoutesV1Module } from './routes/v1/auth/auth.routes.module';
+import { SwaggerModule } from './swagger/swagger.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { AuthRoutesV1Module } from './routes/v1/auth/auth.routes.module';
     RateLimiterModule,
     MailModule,
     AuthRoutesV1Module,
+    SwaggerModule,
   ],
   controllers: [AppController],
   providers: [

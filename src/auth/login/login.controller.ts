@@ -21,7 +21,19 @@ import { ErrorBuilder } from '../../utils/responses/fail';
 import { RequestContextInterceptor } from '../../utils/responses/request-context.interceptor';
 import { RequestMetadata } from '../../utils/responses/types';
 import { Logger } from '../../utils/logger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiHeader,
+} from '@nestjs/swagger';
+import {
+  SuccessResponseDto,
+  ErrorResponseDto,
+} from '../../swagger/dto/base-response.dto';
 
+@ApiTags('Authentication', 'Login')
 @Controller()
 @UseInterceptors(RateLimitInterceptor, RequestContextInterceptor)
 export class LoginController {
@@ -32,6 +44,37 @@ export class LoginController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @RateLimitLogin()
+  @ApiOperation({
+    summary: 'Authenticate user',
+    description:
+      'Authenticate user with email and password. Returns JWT access token and user information.',
+  })
+  @ApiBody({ type: LoginDto })
+  @ApiHeader({
+    name: 'User-Agent',
+    description: 'User agent string',
+    required: false,
+  })
+  @ApiHeader({
+    name: 'X-Forwarded-For',
+    description: 'Client IP address',
+    required: false,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Login successful',
+    type: SuccessResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - invalid credentials',
+    type: ErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many requests - rate limit exceeded',
+    type: ErrorResponseDto,
+  })
   async login(
     @Body() body: LoginDto,
     @Req() req: Request & { requestMetadata?: RequestMetadata },
