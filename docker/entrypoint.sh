@@ -35,5 +35,10 @@ fi
 
 echo "Environment variables set from Docker secrets"
 
+# Read Redis secret (if provided)
+if [ -f "/run/secrets/redis_password" ]; then
+    export REDIS_PASSWORD=$(cat /run/secrets/redis_password | tr -d '\r\n')
+fi
+
 # Execute the main command
 exec "$@"

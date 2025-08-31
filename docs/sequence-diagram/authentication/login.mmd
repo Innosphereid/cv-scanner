@@ -1,0 +1,38 @@
+sequenceDiagram
+    autonumber
+    participant C as "Client"
+    participant A as "API (Auth Controller/Service)"
+    participant D as "DB (Users, Lockout, TokenVersion)"
+
+    C->>A: POST /api/v1/auth/login { email, password }
+    A->>A: Rate limit (10/min per IP)
+    alt Rate limit exceeded
+      A-->>C: 429 Too Many Requests
+    else OK
+      A->>D: Find user by email
+      alt Not found or not verified
+        A->>D: Increment lockout counter if user exists
+        A-->>C: 403 Forbidden (Please verify your email or check credentials)
+      else Found and verified
+        A->>D: Check lockedUntil
+        alt Locked
+          A-->>C: 423 Locked (Account locked until <time>)
+        else Not locked
+          A->>A: Compare password (bcrypt)
+          alt Password mismatch
+            A->>D: Increment lockout counter
+            alt Threshold reached (5 attempts)
+              A->>D: Set lockedUntil=now+15m
+              A-->>C: 423 Locked (Account locked for 15 minutes)
+            else Below threshold
+              A-->>C: 401 Unauthorized (Invalid credentials)
+            end
+          else Password OK
+            A->>A: Generate access JWT (15m)
+            A-->>C: 200 OK + Set-Cookie httpOnly access_token
+          end
+        end
+      end
+    end
+
+

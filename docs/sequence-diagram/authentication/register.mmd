@@ -1,0 +1,61 @@
+sequenceDiagram
+    autonumber
+    participant C as "Client"
+    participant A as "API (Auth Controller/Service)"
+    participant D as "DB (Users, TokenVersion)"
+    participant Q as "Queue (Jobs)"
+    participant M as "Mailer (Mailtrap)"
+
+    C->>A: POST /api/v1/auth/register { email, password }
+    A->>A: Rate limit (5/hour per IP)
+    alt Rate limit exceeded
+      A-->>C: 429 Too Many Requests
+    else OK
+      A->>D: Check if email exists and not locked
+      alt Email exists
+        A-->>C: 409 Conflict (Email already registered)
+      else New user
+        A->>A: Validate password policy
+        alt Weak password
+          A-->>C: 400 Bad Request (Password does not meet policy)
+        else Strong password
+          A->>A: Hash password (bcrypt)
+          A->>D: Create user { email, hash, role="user", verified=false, tokenVersion=1 }
+          A->>A: Generate emailVerificationToken (5 min, single-use)
+          A->>Q: Enqueue SendVerificationEmail(user, token)
+          Q->>M: Send email with verification link
+          A-->>C: 201 Created (success response)
+        end
+      end
+    end
+
+sequenceDiagram
+    autonumber
+    participant C as "Client"
+    participant A as "API (Auth Controller/Service)"
+    participant D as "DB (Users, TokenVersion)"
+    participant Q as "Queue (Jobs)"
+    participant M as "Mailer (Mailtrap)"
+
+    C->>A: POST /api/v1/auth/register { email, password }
+    A->>A: Rate limit (5/hour per IP)
+    alt Rate limit exceeded
+      A-->>C: 429 Too Many Requests
+    else OK
+      A->>D: Check if email exists and not locked
+      alt Email exists
+        A-->>C: 409 Conflict (Email already registered)
+      else New user
+        A->>A: Validate password policy
+        alt Weak password
+          A-->>C: 400 Bad Request (Password does not meet policy)
+        else Strong password
+          A->>A: Hash password (bcrypt)
+          A->>D: Create user { email, hash, role="user", verified=false, tokenVersion=1 }
+          A->>A: Generate emailVerificationToken (5 min, single-use)
+          A->>Q: Enqueue SendVerificationEmail(user, token)
+          Q->>M: Send email with verification link
+          A-->>C: 201 Created (success response)
+        end
+      end
+    end
