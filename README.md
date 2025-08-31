@@ -21,12 +21,499 @@ CV Scanner API is a backend application built using [NestJS](https://github.com/
 ## Main Features
 
 - **CV Processing**: Analysis and processing of CV documents
+- **Authentication System**: Complete user authentication with JWT, email verification, and password management
 - **Advanced Rate Limiting**: Modular and scalable rate limiting middleware
 - **Redis Integration**: High-performance storage using Redis
 - **Environment-based Configuration**: Different configurations for development and production
 - **Comprehensive Logging**: Logging for monitoring and debugging
 - **Health Checks**: Endpoints for system health monitoring
 - **Docker Support**: Containerization for easy deployment
+
+## Authentication System
+
+A comprehensive authentication system built with security best practices, featuring JWT tokens, email verification, password management, and advanced security measures.
+
+### Authentication Features
+
+- **User Registration**: Secure user registration with email verification
+- **JWT Authentication**: Stateless authentication using JSON Web Tokens
+- **Email Verification**: Required email verification before account activation
+- **Password Management**: Secure password reset with OTP via email
+- **Security Measures**: Rate limiting, user lockout, and IP tracking
+- **Queue-based Email**: Asynchronous email processing using BullMQ
+- **Password Hashing**: Bcrypt encryption with configurable rounds
+
+### Authentication Endpoints
+
+#### 1. User Registration
+
+- **Endpoint**: `POST /api/v1/auth/register`
+- **Description**: Create a new user account
+- **Features**: Email verification required, rate limited (5/hour per IP)
+- **Request Body**:
+  ```json
+  {
+    "email": "user@example.com",
+    "password": "securepassword123"
+  }
+  ```
+- **Success Response** (201):
+  ```json
+  {
+    "success": true,
+    "message": "Registration successful",
+    "data": {
+      "id": "uuid-here",
+      "email": "user@example.com",
+      "verified": false,
+      "createdAt": "2024-01-01T00:00:00.000Z"
+    },
+    "metadata": {
+      "request_id": "req-uuid",
+      "execution_time": 150
+    },
+    "status": 201
+  }
+  ```
+- **Error Response** (400):
+  ```json
+  {
+    "success": false,
+    "message": "Email already exists",
+    "errors": [
+      {
+        "code": "REGISTER_ERROR",
+        "message": "Email already exists"
+      }
+    ],
+    "metadata": {
+      "request_id": "req-uuid",
+      "execution_time": 50
+    },
+    "status": 400
+  }
+  ```
+
+#### 2. User Login
+
+- **Endpoint**: `POST /api/v1/auth/login`
+- **Description**: Authenticate user and receive JWT token
+- **Features**: Rate limited (3 attempts per 15 minutes), IP tracking, user agent logging
+- **Request Body**:
+  ```json
+  {
+    "email": "user@example.com",
+    "password": "securepassword123"
+  }
+  ```
+- **Success Response** (200):
+  ```json
+  {
+    "success": true,
+    "message": "Login successful",
+    "data": {
+      "user": {
+        "id": "uuid-here",
+        "email": "user@example.com",
+        "role": "user",
+        "verified": true,
+        "createdAt": "2024-01-01T00:00:00.000Z"
+      },
+      "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "tokenType": "Bearer",
+      "expiresIn": "15m"
+    },
+    "metadata": {
+      "request_id": "req-uuid",
+      "execution_time": 200
+    },
+    "status": 200
+  }
+  ```
+- **Error Response** (400):
+  ```json
+  {
+    "success": false,
+    "message": "Invalid credentials",
+    "errors": [
+      {
+        "code": "LOGIN_ERROR",
+        "message": "Invalid credentials"
+      }
+    ],
+    "metadata": {
+      "request_id": "req-uuid",
+      "execution_time": 100
+    },
+    "status": 400
+  }
+  ```
+- **Error Response** (401):
+  ```json
+  {
+    "success": false,
+    "message": "Email not verified",
+    "errors": [
+      {
+        "code": "LOGIN_ERROR",
+        "message": "Please verify your email first"
+      }
+    ],
+    "metadata": {
+      "request_id": "req-uuid",
+      "execution_time": 80
+    },
+    "status": 401
+  }
+  ```
+
+#### 3. Email Verification
+
+- **Endpoint**: `GET /api/v1/auth/verify-email?token=<verification_token>`
+- **Description**: Verify user email address
+- **Features**: Rate limited (30 attempts per 5 minutes), token-based verification
+- **Success Response** (200):
+  ```json
+  {
+    "success": true,
+    "message": "Email verified successfully",
+    "data": {
+      "id": "uuid-here",
+      "email": "user@example.com",
+      "verified": true,
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    "metadata": {
+      "request_id": "req-uuid",
+      "execution_time": 120
+    },
+    "status": 200
+  }
+  ```
+- **Error Response** (400):
+  ```json
+  {
+    "success": false,
+    "message": "Invalid verification token",
+    "errors": [
+      {
+        "code": "VERIFY_EMAIL_ERROR",
+        "message": "Invalid verification token"
+      }
+    ],
+    "metadata": {
+      "request_id": "req-uuid",
+      "execution_time": 60
+    },
+    "status": 400
+  }
+  ```
+
+#### 4. Forgot Password
+
+- **Endpoint**: `POST /api/v1/auth/forgot-password`
+- **Description**: Request password reset OTP
+- **Features**: Rate limited (3 attempts per hour), OTP sent via email
+- **Request Body**:
+  ```json
+  {
+    "email": "user@example.com"
+  }
+  ```
+- **Success Response** (200):
+  ```json
+  {
+    "success": true,
+    "message": "OTP has been sent to your email",
+    "data": {
+      "email": "user@example.com",
+      "otpExpiresIn": "1 hour",
+      "message": "Check your email for the OTP code"
+    },
+    "metadata": {
+      "request_id": "req-uuid",
+      "execution_time": 180
+    },
+    "status": 200
+  }
+  ```
+- **Error Response** (400):
+  ```json
+  {
+    "success": false,
+    "message": "User not found",
+    "errors": [
+      {
+        "code": "FORGOT_PASSWORD_ERROR",
+        "message": "User not found"
+      }
+    ],
+    "metadata": {
+      "request_id": "req-uuid",
+      "execution_time": 90
+    },
+    "status": 400
+  }
+  ```
+- **Error Response** (429):
+  ```json
+  {
+    "success": false,
+    "message": "Too many requests, please try again later",
+    "errors": [
+      {
+        "code": "RATE_LIMIT_EXCEEDED",
+        "message": "Rate limit exceeded"
+      }
+    ],
+    "metadata": {
+      "request_id": "req-uuid",
+      "execution_time": 45
+    },
+    "status": 429
+  }
+  ```
+
+#### 5. Reset Password
+
+- **Endpoint**: `POST /api/v1/auth/reset-password`
+- **Description**: Reset password using OTP
+- **Features**: OTP validation, secure password update
+- **Request Body**:
+  ```json
+  {
+    "email": "user@example.com",
+    "otp": "123456",
+    "newPassword": "newsecurepassword123"
+  }
+  ```
+- **Success Response** (200):
+  ```json
+  {
+    "success": true,
+    "message": "Password reset successfully",
+    "data": {
+      "email": "user@example.com",
+      "message": "Your password has been updated. You can now login with your new password."
+    },
+    "metadata": {
+      "request_id": "req-uuid",
+      "execution_time": 250
+    },
+    "status": 200
+  }
+  ```
+- **Error Response** (400):
+  ```json
+  {
+    "success": false,
+    "message": "Invalid OTP",
+    "errors": [
+      {
+        "code": "RESET_PASSWORD_ERROR",
+        "message": "Invalid or expired OTP"
+      }
+    ],
+    "metadata": {
+      "request_id": "req-uuid",
+      "execution_time": 110
+    },
+    "status": 400
+  }
+  ```
+- **Error Response** (400):
+  ```json
+  {
+    "success": false,
+    "message": "Password validation failed",
+    "errors": [
+      {
+        "code": "RESET_PASSWORD_ERROR",
+        "message": "Password must be at least 8 characters long"
+      }
+    ],
+    "metadata": {
+      "request_id": "req-uuid",
+      "execution_time": 85
+    },
+    "status": 400
+  }
+  ```
+
+#### 6. Resend Verification
+
+- **Endpoint**: `POST /api/v1/auth/resend-verification`
+- **Description**: Resend email verification link
+- **Features**: Rate limited, prevents spam
+- **Request Body**:
+  ```json
+  {
+    "email": "user@example.com"
+  }
+  ```
+- **Success Response** (200):
+  ```json
+  {
+    "success": true,
+    "message": "Verification email sent successfully",
+    "data": {
+      "email": "user@example.com",
+      "message": "Check your email for the verification link"
+    },
+    "metadata": {
+      "request_id": "req-uuid",
+      "execution_time": 160
+    },
+    "status": 200
+  }
+  ```
+- **Error Response** (400):
+  ```json
+  {
+    "success": false,
+    "message": "User not found",
+    "errors": [
+      {
+        "code": "RESEND_VERIFICATION_ERROR",
+        "message": "User not found"
+      }
+    ],
+    "metadata": {
+      "request_id": "req-uuid",
+      "execution_time": 70
+    },
+    "status": 400
+  }
+  ```
+- **Error Response** (400):
+  ```json
+  {
+    "success": false,
+    "message": "Email already verified",
+    "errors": [
+      {
+        "code": "RESEND_VERIFICATION_ERROR",
+        "message": "Email is already verified"
+      }
+    ],
+    "metadata": {
+      "request_id": "req-uuid",
+      "execution_time": 65
+    },
+    "status": 200
+  }
+  ```
+
+### Security Features
+
+#### Password Security
+
+- **Bcrypt Hashing**: 12 rounds of bcrypt encryption
+- **Password Validation**: Strong password requirements
+- **Secure Storage**: Passwords never stored in plain text
+
+#### Account Protection
+
+- **Email Verification**: Required before account activation
+- **User Lockout**: Automatic lockout after failed attempts
+- **IP Tracking**: Monitor and rate limit by IP address
+- **User Agent Logging**: Track device and browser information
+
+#### Rate Limiting
+
+- **Login Protection**: 3 attempts per 15 minutes (production)
+- **Registration**: 5 attempts per hour per IP
+- **Email Verification**: 30 attempts per 5 minutes
+- **Password Reset**: 3 attempts per hour per email
+
+### JWT Configuration
+
+```typescript
+// JWT Settings
+JWT_SECRET=your-secure-secret-key
+JWT_TTL=15m  // Token expiration time
+AUTH_BCRYPT_ROUNDS=12  // Password hashing rounds
+```
+
+### Email Configuration
+
+```typescript
+// Email Settings
+MAILTRAP_HOST=sandbox.smtp.mailtrap.io
+MAILTRAP_PORT=2525
+MAILTRAP_USER=your-email-user
+MAILTRAP_PASS=your-email-password
+MAIL_FROM_EMAIL=noreply@cvscanner.com
+MAIL_FROM_NAME=CV Scanner
+```
+
+### User Entity Structure
+
+```typescript
+interface User {
+  id: string; // UUID primary key
+  email: string; // Unique email address
+  passwordHash: string; // Bcrypt hashed password
+  role: string; // User role (default: 'user')
+  verified: boolean; // Email verification status
+  lockoutAttempts: number; // Failed login attempts
+  lockedUntil: Date | null; // Account lockout timestamp
+  tokenVersion: number; // JWT invalidation version
+  createdAt: Date; // Account creation date
+  updatedAt: Date; // Last update date
+}
+```
+
+### Authentication Flow
+
+```
+1. User Registration
+   ├── Validate input data
+   ├── Hash password with bcrypt
+   ├── Create user record
+   ├── Send verification email
+   └── Return success response
+
+2. Email Verification
+   ├── Validate verification token
+   ├── Mark email as verified
+   ├── Activate user account
+   └── Return verification status
+
+3. User Login
+   ├── Validate credentials
+   ├── Check account status
+   ├── Generate JWT token
+   ├── Log login attempt
+   └── Return token and user info
+
+4. Password Reset
+   ├── Validate email
+   ├── Generate OTP
+   ├── Send OTP via email
+   ├── Validate OTP
+   └── Update password
+```
+
+### Queue System (BullMQ)
+
+The authentication system uses BullMQ for asynchronous email processing:
+
+- **Verification Emails**: Queue for sending email verification links
+- **Password Reset OTPs**: Queue for sending password reset codes
+- **Retry Mechanism**: Automatic retry with exponential backoff
+- **Job Management**: Configurable attempts and cleanup policies
+
+### Best Practices
+
+1. **Always verify email before allowing login**
+2. **Use strong password requirements**
+3. **Implement proper rate limiting**
+4. **Log all authentication attempts**
+5. **Use secure JWT secrets**
+6. **Implement account lockout mechanisms**
+7. **Monitor failed authentication attempts**
+8. **Use HTTPS in production**
 
 ## Rate Limiter Middleware
 
