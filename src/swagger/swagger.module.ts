@@ -4,7 +4,6 @@ import { SwaggerController } from './swagger.controller';
 import { DocumentationService } from './services/documentation.service';
 import { RouteScannerService } from './services/route-scanner.service';
 import { ResponseExampleService } from './services/response-example.service';
-import { SwaggerConfigService } from './config/swagger.config';
 
 @Module({
   imports: [DiscoveryModule],
