@@ -11,6 +11,7 @@ import { RateLimiterModule } from './middlewares/rate-limiter';
 import { MailModule } from './mail/mail.module';
 import { AuthRoutesV1Module } from './routes/v1/auth/auth.routes.module';
 import { SwaggerModule } from './swagger/swagger.module';
+import { CvRoutesV1Module } from './routes/v1/cv/cv.routes.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { SwaggerModule } from './swagger/swagger.module';
     MailModule,
     AuthRoutesV1Module,
     SwaggerModule,
+    CvRoutesV1Module,
   ],
   controllers: [AppController],
   providers: [
