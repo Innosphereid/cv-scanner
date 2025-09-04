@@ -19,7 +19,7 @@ export function buildTypeOrmOptions(db: DatabaseConfig): TypeOrmModuleOptions {
   const migrationsPaths =
     useTsMigrations || isTsNode
       ? [join(process.cwd(), 'src/migrations/*{.ts,.js}')]
-      : [join(__dirname, '../../migrations/*{.js}')];
+      : [join(__dirname, '../../../dist/migrations/*.js')];
 
   const base: DataSourceOptions = {
     type: 'postgres',
