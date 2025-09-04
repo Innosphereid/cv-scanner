@@ -1,0 +1,43 @@
+sequenceDiagram
+	autonumber
+
+	participant C as "Client"
+	participant RL as "RateLimiter"
+	participant AG as "Auth Guard (Cookie JWT)"
+	participant API as "NestJS API (Controller)"
+	participant MU as "Multer (multipart parser)"
+	participant UP as "Upload Utils (Cloudinary)"
+	participant CL as "Cloudinary"
+	participant DB as "Postgres (cv_uploads)"
+
+	Note over C,API: POST /v1/cv/uploads (multipart/form-data, field: "cv_file")
+
+	C->>API: POST /v1/cv/uploads (cookie auth) + file "cv_file"
+	API->>AG: Validate session from cookie
+	AG-->>API: OK or 401
+	alt Unauthorized
+		API-->>C: 401 Unauthorized { message, code: "AUTH_REQUIRED" }
+	else Authorized
+		API->>RL: Check rate limit (5 req/min per user)
+		RL-->>API: Allowed or 429
+		alt Rate limit exceeded
+			API-->>C: 429 Too Many Requests
+		else Allowed
+			API->>MU: Parse multipart & stage file
+			MU-->>API: File metadata (name, size, mimetype)
+			API->>API: Validate: mimetype == application/pdf, size <= 5MB
+			alt Invalid file
+				API-->>C: 415/413 { code: "UNSUPPORTED_MEDIA_TYPE" | "FILE_TOO_LARGE" }
+			else Valid file
+				API->>UP: uploadSingle(input=buffer, options: exif=false, folder="cv/{userId}/{uuid}")
+				UP->>CL: Upload stream (strip EXIF, resource_type=auto)
+				CL-->>UP: { public_id, secure_url, bytes }
+				UP-->>API: { publicId, secureUrl, size }
+				API->>DB: INSERT cv_uploads (userId, original_filename, file_size_bytes, cloudinary_public_id, cloudinary_secure_url)
+				DB-->>API: { id }
+				API-->>C: 201 { id, url: secure_url }
+			end
+		end
+	end
+
+
