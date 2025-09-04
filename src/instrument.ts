@@ -9,7 +9,9 @@ Sentry.init({
     nodeProfilingIntegration(),
 
     // send console.log, console.warn, and console.error calls as logs to Sentry
-    Sentry.consoleLoggingIntegration({ levels: ['log', 'warn', 'error'] }),
+    Sentry.consoleLoggingIntegration({
+      levels: ['log', 'warn', 'error', 'debug', 'assert', 'info', 'trace'],
+    }),
   ],
   // Enable logs to be sent to Sentry
   enableLogs: true,
