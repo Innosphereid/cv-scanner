@@ -1,15 +1,8 @@
-import { Inject, Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { CvUploadEntity } from '../../entities/cv-upload.entity';
-import { CLOUDINARY_TOKEN } from '../../config/cloudinary/cloudinary.module';
+import { Injectable } from '@nestjs/common';
 import { Logger } from '../../utils/logger';
-import {
-  uploadSingle,
-  type CloudinaryClient,
-} from '../../utils/uploadFile/upload';
 import type { UploadInput } from '../../utils/uploadFile/types';
-import { randomUUID } from 'crypto';
+import { CvUploadProcessorService } from './services/cv-upload-processor.service';
+import type { DuplicateHandlingOptions } from './types/duplicate-handling.types';
 
 export interface HandleUploadInput {
   userId: string;
@@ -17,11 +10,14 @@ export interface HandleUploadInput {
   mimetype: string;
   size: number;
   bufferOrPath: UploadInput;
+  duplicateHandling?: DuplicateHandlingOptions;
 }
 
 export interface HandleUploadResult {
   id: string;
   url: string;
+  isNewUpload: boolean;
+  existingUploadId?: string;
 }
 
 @Injectable()
@@ -29,52 +25,63 @@ export class CvUploadService {
   private readonly context = 'CvUploadService';
 
   constructor(
-    @InjectRepository(CvUploadEntity)
-    private readonly repo: Repository<CvUploadEntity>,
-    @Inject(CLOUDINARY_TOKEN)
-    private readonly cloudinary: CloudinaryClient,
     private readonly logger: Logger,
+    private readonly uploadProcessor: CvUploadProcessorService,
   ) {}
 
+  /**
+   * Handle CV upload with duplicate detection and handling
+   * @param input - Upload input parameters
+   * @returns Upload result with metadata
+   */
   async handleUpload(input: HandleUploadInput): Promise<HandleUploadResult> {
-    const { userId, originalFilename, bufferOrPath } = input;
-
-    // Generate folder: cv/{userId}/{uuid}
-    const folderPrefix = `cv/${userId}/${randomUUID()}`;
-
-    const uploadRes = await uploadSingle(
-      this.cloudinary as any,
-      this.logger,
-      bufferOrPath,
-      {
-        folderPrefix,
-        resourceType: 'auto',
-        maxAttempts: 3,
-        attemptDelayMs: 500,
-      },
-    );
-
-    // Persist to DB
-    const entity = this.repo.create({
+    const {
       userId,
       originalFilename,
-      fileSizeBytes: input.size,
-      cloudinaryPublicId: uploadRes.publicId,
-      cloudinaryUrl: uploadRes.url,
-      cloudinarySecureUrl: uploadRes.url,
-      fileHash: uploadRes.checksum,
-      parsingStatus: 'pending',
-      parsingErrorMessage: null,
-    });
+      mimetype,
+      size,
+      bufferOrPath,
+      duplicateHandling,
+    } = input;
 
-    const saved = await this.repo.save(entity);
-
-    this.logger.info('CV upload persisted', {
+    this.logger.info('Processing CV upload request', {
       userId,
-      uploadId: saved.id,
-      publicId: uploadRes.publicId,
+      originalFilename,
+      size,
+      mimetype,
+      duplicateHandling,
     });
 
-    return { id: saved.id, url: uploadRes.url };
+    try {
+      const result = await this.uploadProcessor.processUpload({
+        userId,
+        originalFilename,
+        mimetype,
+        size,
+        bufferOrPath,
+        duplicateHandling,
+      });
+
+      this.logger.info('CV upload completed successfully', {
+        userId,
+        uploadId: result.id,
+        isNewUpload: result.isNewUpload,
+        existingUploadId: result.existingUploadId,
+      });
+
+      return result;
+    } catch (error) {
+      this.logger.error(
+        'CV upload failed',
+        error instanceof Error ? error.stack : undefined,
+        this.context,
+        {
+          userId,
+          originalFilename,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+      throw error;
+    }
   }
 }

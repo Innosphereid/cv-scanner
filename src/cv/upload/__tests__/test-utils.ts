@@ -49,6 +49,7 @@ export const createMockHandleUploadResult = (
 ): HandleUploadResult => ({
   id: TEST_CONSTANTS.UPLOAD_ID,
   url: TEST_CONSTANTS.CLOUDINARY_URL,
+  isNewUpload: true,
   ...overrides,
 });
 

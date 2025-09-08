@@ -5,6 +5,9 @@ import { CvUploadService } from './cv-upload.service';
 import { CvUploadController } from './cv-upload.controller';
 import { CloudinaryModule } from '../../config/cloudinary/cloudinary.module';
 import { LoginModule } from '../../auth/login/login.module';
+import { FileHashService } from './services/file-hash.service';
+import { DuplicateDetectionService } from './services/duplicate-detection.service';
+import { CvUploadProcessorService } from './services/cv-upload-processor.service';
 
 @Module({
   imports: [
@@ -15,7 +18,17 @@ import { LoginModule } from '../../auth/login/login.module';
     LoginModule,
   ],
   controllers: [CvUploadController],
-  providers: [CvUploadService],
-  exports: [CvUploadService],
+  providers: [
+    CvUploadService,
+    FileHashService,
+    DuplicateDetectionService,
+    CvUploadProcessorService,
+  ],
+  exports: [
+    CvUploadService,
+    FileHashService,
+    DuplicateDetectionService,
+    CvUploadProcessorService,
+  ],
 })
 export class CvUploadModule {}

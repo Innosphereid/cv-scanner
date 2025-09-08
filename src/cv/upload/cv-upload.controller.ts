@@ -27,6 +27,7 @@ import {
   ApiResponse,
 } from '@nestjs/swagger';
 import type { MulterFile } from '../../utils/uploadFile/types';
+import { DuplicateHandlingStrategy } from './types/duplicate-handling.types';
 
 // Multer setup: validate PDF mimetype and size <= 5MB
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -81,6 +82,10 @@ export class CvUploadController {
     },
   })
   @ApiResponse({ status: 201, description: 'Created' })
+  @ApiResponse({
+    status: 409,
+    description: 'File already uploaded (if configured to throw error)',
+  })
   @ApiResponse({ status: 401, description: 'Authentication required' })
   @ApiResponse({ status: 413, description: 'File too large' })
   @ApiResponse({ status: 415, description: 'Unsupported media type (non-PDF)' })
@@ -103,19 +108,51 @@ export class CvUploadController {
       throw new HttpException('File exceeds 5 MB limit', 413);
     }
 
-    const result = await this.service.handleUpload({
-      userId,
-      originalFilename: file.originalname,
-      mimetype: file.mimetype,
-      size: file.size,
-      bufferOrPath: file.buffer ?? '',
-    });
+    try {
+      const result = await this.service.handleUpload({
+        userId,
+        originalFilename: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+        bufferOrPath: file.buffer ?? '',
+        duplicateHandling: {
+          strategy: DuplicateHandlingStrategy.RETURN_EXISTING,
+          updateMetadata: false,
+        },
+      });
 
-    return new SuccessBuilder<{ id: string; url: string }>()
-      .message('Upload successful')
-      .data({ id: result.id, url: result.url })
-      .metadata(meta)
-      .status(HttpStatus.CREATED)
-      .build();
+      const message = result.isNewUpload
+        ? 'Upload successful'
+        : 'File already exists, returning existing upload';
+
+      return new SuccessBuilder<{
+        id: string;
+        url: string;
+        isNewUpload: boolean;
+        existingUploadId?: string;
+      }>()
+        .message(message)
+        .data({
+          id: result.id,
+          url: result.url,
+          isNewUpload: result.isNewUpload,
+          existingUploadId: result.existingUploadId,
+        })
+        .metadata(meta)
+        .status(HttpStatus.CREATED)
+        .build();
+    } catch (error) {
+      this.logger.error(
+        'CV upload failed in controller',
+        error instanceof Error ? error.stack : undefined,
+        'CvUploadController',
+        {
+          userId,
+          originalFilename: file.originalname,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+      throw error;
+    }
   }
 }
