@@ -9,6 +9,8 @@ export interface CloudinaryConfig {
   retryAttempts: number;
   retryDelayMs: number;
   failFast: boolean;
+  defaultUploadType: 'upload' | 'private' | 'authenticated';
+  defaultAccessMode: 'public' | 'token';
 }
 
 function parseBoolean(value: unknown, defaultValue: boolean): boolean {
@@ -34,5 +36,13 @@ export const cloudinaryConfig = registerAs(
     retryAttempts: Number(process.env.CLOUDINARY_RETRY_ATTEMPTS ?? 2),
     retryDelayMs: Number(process.env.CLOUDINARY_RETRY_DELAY_MS ?? 500),
     failFast: parseBoolean(process.env.CLOUDINARY_FAIL_FAST, true),
+    defaultUploadType:
+      (process.env.CLOUDINARY_DEFAULT_UPLOAD_TYPE as
+        | 'upload'
+        | 'private'
+        | 'authenticated') ?? 'upload',
+    defaultAccessMode:
+      (process.env.CLOUDINARY_DEFAULT_ACCESS_MODE as 'public' | 'token') ??
+      'public',
   }),
 );

@@ -187,9 +187,11 @@ export class CvUploadProcessorService {
       input,
       {
         folderPrefix,
-        resourceType: 'auto',
+        resourceType: 'raw', // Force 'raw' for PDF files to ensure proper handling
         maxAttempts: 3,
         attemptDelayMs: 500,
+        type: 'upload', // Ensure public upload type
+        accessMode: 'public', // Ensure public access mode
       },
     );
 
