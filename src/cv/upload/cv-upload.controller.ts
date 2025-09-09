@@ -38,7 +38,7 @@ function pdfFileFilter(
   file: MulterFile,
   cb: (error: Error | null, acceptFile: boolean) => void,
 ): void {
-  if (file.mimetype !== ACCEPTED_MIME) {
+  if (!file || !file.mimetype || file.mimetype !== ACCEPTED_MIME) {
     return cb(new Error('UNSUPPORTED_MEDIA_TYPE'), false);
   }
   cb(null, true);
@@ -86,6 +86,7 @@ export class CvUploadController {
     status: 409,
     description: 'File already uploaded (if configured to throw error)',
   })
+  @ApiResponse({ status: 400, description: 'Bad request - No file uploaded' })
   @ApiResponse({ status: 401, description: 'Authentication required' })
   @ApiResponse({ status: 413, description: 'File too large' })
   @ApiResponse({ status: 415, description: 'Unsupported media type (non-PDF)' })
@@ -100,12 +101,26 @@ export class CvUploadController {
     const meta = req.requestMetadata || { request_id: '', execution_time: 0 };
     const userId = req.user?.userId ?? '';
 
-    // Additional server-side validation
-    if (file.mimetype !== ACCEPTED_MIME) {
-      throw new HttpException('Only PDF files are supported', 415);
+    // Check if file was uploaded
+    if (!file) {
+      throw new HttpException(
+        'No file uploaded. Please select a PDF file to upload.',
+        HttpStatus.BAD_REQUEST,
+      );
     }
-    if (file.size > MAX_FILE_SIZE) {
-      throw new HttpException('File exceeds 5 MB limit', 413);
+
+    // Additional server-side validation
+    if (!file.mimetype || file.mimetype !== ACCEPTED_MIME) {
+      throw new HttpException(
+        'Only PDF files are supported',
+        HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+      );
+    }
+    if (!file.size || file.size > MAX_FILE_SIZE) {
+      throw new HttpException(
+        'File exceeds 5 MB limit',
+        HttpStatus.PAYLOAD_TOO_LARGE,
+      );
     }
 
     try {
@@ -148,7 +163,7 @@ export class CvUploadController {
         'CvUploadController',
         {
           userId,
-          originalFilename: file.originalname,
+          originalFilename: file?.originalname || 'unknown',
           error: error instanceof Error ? error.message : String(error),
         },
       );
