@@ -1,0 +1,33 @@
+sequenceDiagram
+	autonumber
+
+	participant C as "Client"
+	participant RL as "RateLimiter"
+	participant AG as "Auth Guard (Cookie JWT)"
+	participant API as "NestJS API (Controller)"
+	participant DB as "Postgres (cv_uploads)"
+
+	Note over C,API: DELETE /v1/cv/uploads/:id (soft delete)
+
+	C->>API: DELETE /v1/cv/uploads/:id (cookie auth)
+	API->>AG: Validate session from cookie
+	AG-->>API: OK or 401
+	alt Unauthorized
+		API-->>C: 401 Unauthorized
+	else Authorized
+		API->>RL: Check rate limit (30 req/min per user)
+		RL-->>API: Allowed or 429
+		alt Rate limit exceeded
+			API-->>C: 429 Too Many Requests
+		else Allowed
+			API->>DB: UPDATE cv_uploads SET deleted_at = now() WHERE id = :id AND user_id = me
+			DB-->>API: Affected rows
+			alt Not found
+				API-->>C: 404 Not Found
+			else Soft-deleted
+				API-->>C: 204 No Content
+			end
+		end
+	end
+
+

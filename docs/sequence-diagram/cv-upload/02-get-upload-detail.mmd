@@ -1,0 +1,33 @@
+sequenceDiagram
+	autonumber
+
+	participant C as "Client"
+	participant RL as "RateLimiter"
+	participant AG as "Auth Guard (Cookie JWT)"
+	participant API as "NestJS API (Controller)"
+	participant DB as "Postgres (cv_uploads)"
+
+	Note over C,API: GET /v1/cv/uploads/:id (detail)
+
+	C->>API: GET /v1/cv/uploads/:id (cookie auth)
+	API->>AG: Validate session from cookie
+	AG-->>API: OK or 401
+	alt Unauthorized
+		API-->>C: 401 Unauthorized
+	else Authorized
+		API->>RL: Check rate limit (30 req/min per user)
+		RL-->>API: Allowed or 429
+		alt Rate limit exceeded
+			API-->>C: 429 Too Many Requests
+		else Allowed
+			API->>DB: SELECT by id AND user_id AND deleted_at IS NULL
+			DB-->>API: Row or none
+			alt Not found
+				API-->>C: 404 Not Found
+			else Found
+				API-->>C: 200 { id, url, original_filename, file_size_bytes, created_at }
+			end
+		end
+	end
+
+

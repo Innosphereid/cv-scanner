@@ -42,6 +42,9 @@ export interface UploadOptions {
   maxAttempts?: number;
   // Delay between attempts in ms (default 500)
   attemptDelayMs?: number;
+  // Access control options
+  type?: 'upload' | 'private' | 'authenticated';
+  accessMode?: 'public' | 'token';
 }
 
 export interface UploadBatchOptions extends UploadOptions {

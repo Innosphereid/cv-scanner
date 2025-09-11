@@ -8,6 +8,10 @@ import {
   type UploadBatchItemResult,
 } from './types';
 import {
+  createReliablePublicUrl,
+  generateAlternativeUrls,
+} from './public-url-generator';
+import {
   toBuffer,
   computeSha256,
   rejectUnsafeMimeOrExt,
@@ -72,14 +76,23 @@ export async function uploadSingle(
     cloudinary.config(cloudinaryConfigOverride as ConfigOptions);
   }
 
+  // Special handling for PDF files to ensure public access
+  const isPdfFile =
+    mimetype === 'application/pdf' || filename?.toLowerCase().endsWith('.pdf');
+  const finalResourceType = isPdfFile ? 'raw' : resourceType;
+
   logger.log(`Uploading file publicId=${publicId}`, context, {
     size: buffer.length,
+    mimetype,
+    filename,
+    resourceType: finalResourceType,
+    isPdfFile,
   });
 
   // We strip metadata by specifying exif stripping and use original format (no transformation)
   const uploadOptions = {
     public_id: publicId,
-    resource_type: resourceType,
+    resource_type: finalResourceType,
     use_filename: false,
     unique_filename: false,
     overwrite: !!idempotencyKey,
@@ -88,6 +101,14 @@ export async function uploadSingle(
     faces: false,
     quality_analysis: false,
     invalidate: true,
+    // Ensure public access without authentication - CRITICAL for PDFs
+    type: 'upload', // Force 'upload' type for public access
+    access_mode: 'public', // Force 'public' access mode
+    // Additional options for raw files (PDFs)
+    ...(isPdfFile && {
+      flags: 'attachment', // Ensure proper PDF delivery
+      format: 'pdf', // Explicit format
+    }),
   } as Record<string, any>;
 
   let lastError: unknown;
@@ -110,11 +131,36 @@ export async function uploadSingle(
         },
       );
 
-      const url: string = result.secure_url ?? result.url ?? '';
+      // Generate reliable public URL that works without authentication
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      const cloudName = (cloudinary as any).config().cloud_name as string;
+      const reliableUrl = createReliablePublicUrl(result, cloudName);
+
+      // Generate alternative URLs for testing
+      const alternativeUrls = generateAlternativeUrls({
+        cloudName,
+        publicId: result.public_id || publicId,
+        resourceType:
+          (result.resource_type as 'raw' | 'image' | 'video' | 'auto') || 'raw',
+        format: result.format || 'pdf',
+        version: (result as any).version,
+      });
+
+      // Use original Cloudinary URL as primary, fallback to our generated URL
+      const url: string = result.secure_url || result.url || reliableUrl || '';
       const format: string = result.format ?? result.resource_type ?? 'unknown';
       const size: number = Number(result.bytes ?? buffer.length);
 
-      logger.log(`Upload success publicId=${publicId}`, context, { url });
+      logger.log(`Upload success publicId=${publicId}`, context, {
+        url,
+        reliableUrl,
+        secure_url: result.secure_url,
+        resource_type: result.resource_type,
+        format: result.format,
+        alternativeUrls,
+        cloudinaryPublicId: result.public_id,
+        cloudinaryVersion: (result as any).version,
+      });
       return {
         url,
         publicId: result.public_id ?? publicId,
