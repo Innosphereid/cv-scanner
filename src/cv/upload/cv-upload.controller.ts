@@ -81,15 +81,159 @@ export class CvUploadController {
       required: ['cv_file'],
     },
   })
-  @ApiResponse({ status: 201, description: 'Created' })
+  @ApiResponse({
+    status: 201,
+    description: 'Created',
+    content: {
+      'application/json': {
+        examples: {
+          created: {
+            summary: 'Upload successful',
+            value: {
+              status: 'success',
+              message: 'Upload successful',
+              data: {
+                id: 'upl_1234567890',
+                url: 'https://res.cloudinary.com/demo/image/upload/v123456789/cv/upl_1234567890.pdf',
+                isNewUpload: true,
+              },
+              metadata: {
+                request_id: 'req-abc123',
+                execution_time: 45,
+              },
+              pagination: null,
+              status_code: 201,
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - No file uploaded',
+    content: {
+      'application/json': {
+        examples: {
+          noFile: {
+            summary: 'No file uploaded',
+            value: {
+              status: 'error',
+              message: 'No file uploaded. Please select a PDF file to upload.',
+              errors: [
+                {
+                  code: 'NO_FILE_UPLOADED',
+                  message: 'No file provided in field "cv_file"',
+                },
+              ],
+              metadata: { request_id: 'req-abc123', execution_time: 2 },
+              status_code: 400,
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Authentication required',
+    content: {
+      'application/json': {
+        examples: {
+          unauthorized: {
+            summary: 'Unauthorized',
+            value: {
+              status: 'error',
+              message: 'Authentication required',
+              errors: [
+                {
+                  code: 'AUTH_REQUIRED',
+                  message: 'Valid session cookie is required',
+                },
+              ],
+              metadata: { request_id: 'req-abc123', execution_time: 1 },
+              status_code: 401,
+            },
+          },
+        },
+      },
+    },
+  })
   @ApiResponse({
     status: 409,
     description: 'File already uploaded (if configured to throw error)',
+    content: {
+      'application/json': {
+        examples: {
+          conflict: {
+            summary: 'Duplicate upload',
+            value: {
+              status: 'error',
+              message: 'File already uploaded',
+              errors: [
+                {
+                  code: 'DUPLICATE_UPLOAD',
+                  message: 'The same file has already been uploaded',
+                },
+              ],
+              metadata: { request_id: 'req-abc123', execution_time: 7 },
+              status_code: 409,
+            },
+          },
+        },
+      },
+    },
   })
-  @ApiResponse({ status: 400, description: 'Bad request - No file uploaded' })
-  @ApiResponse({ status: 401, description: 'Authentication required' })
-  @ApiResponse({ status: 413, description: 'File too large' })
-  @ApiResponse({ status: 415, description: 'Unsupported media type (non-PDF)' })
+  @ApiResponse({
+    status: 413,
+    description: 'File too large',
+    content: {
+      'application/json': {
+        examples: {
+          tooLarge: {
+            summary: 'Payload too large',
+            value: {
+              status: 'error',
+              message: 'File exceeds 5 MB limit',
+              errors: [
+                {
+                  code: 'PAYLOAD_TOO_LARGE',
+                  message: 'Maximum file size is 5 MB',
+                },
+              ],
+              metadata: { request_id: 'req-abc123', execution_time: 1 },
+              status_code: 413,
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 415,
+    description: 'Unsupported media type (non-PDF)',
+    content: {
+      'application/json': {
+        examples: {
+          unsupported: {
+            summary: 'Unsupported media type',
+            value: {
+              status: 'error',
+              message: 'Only PDF files are supported',
+              errors: [
+                {
+                  code: 'UNSUPPORTED_MEDIA_TYPE',
+                  message: 'Only application/pdf is allowed',
+                },
+              ],
+              metadata: { request_id: 'req-abc123', execution_time: 1 },
+              status_code: 415,
+            },
+          },
+        },
+      },
+    },
+  })
   async uploadCv(
     @UploadedFile() file: MulterFile,
     @Req()
